@@ -1,0 +1,289 @@
+EXTRACT:
+  dataset_url: "https://www.data.gouv.fr/api/1/datasets/operations-coordonnees-par-les-cross/"
+  timeout_sec: 20
+  output_dir: "data/raw"
+# section validation des données source --> Raw DB
+DATA_VALIDATION:
+  # Définir le schema de validation pour les données du fichier flotteurs.csv
+  flotteurs:
+    operation_id:
+      type: int
+      nullable: false
+
+    numero_ordre:
+      type: float
+      nullable: true
+      checks:
+        - greater_than: 0
+
+    pavillon:
+      type: str
+      nullable: true
+      checks:
+        - isin: ["Français", "Étranger"]
+
+    resultat_flotteur:
+      type: str
+      nullable: true
+      checks:
+        - isin:
+          - 'Difficulté surmontée, reprise de route'
+          - 'Remorqué'
+          - 'Assisté'
+          - 'Non assisté, cas de fausse alerte'
+          - 'Perdu / Coulé'
+          - 'Retrouvé après recherche'
+          - 'Échoué'
+          - 'Côte rejointe par ses propres moyens'
+          - 'Inconnu'
+          - 'A la dérive'
+          - 'Au mouillage'
+          - 'Déséchoué'
+          - 'Volé'
+          - 'Renfloué'
+          - 'Non renseigné'
+          - 'Immobilisé dans engin'
+
+    type_flotteur:
+      type: str
+      nullable: true
+      # checks:
+      #   - isin:
+      #       - "Pêche"
+      #       - "Plaisance à moteur < 8m"
+      #       - "Plaisance à moteur > 8m"
+      #       - "Plaisance à voile"
+      #       - "Navire de charge ou de servitude"
+
+    categorie_flotteur:
+      type: str
+      nullable: true
+      checks:
+        - isin: ["Aéronef","Pêche", "Plaisance", "Commerce", "Loisir nautique", "Autre"]
+
+    numero_immatriculation:
+      type: str
+      nullable: true
+
+  operations_stats:
+    operation_id:
+      type: int
+      unique: true
+      nullable: false
+    date:
+      type: datetime
+      nullable: false
+    annee:
+      type: int
+      nullable: false
+      check: "(2030 > x) & (x > 1900)"
+    mois:
+      type: int
+      nullable: false
+      check: "(1 <= x) & (x <= 12)"
+    jour:
+      type: int
+      nullable: false
+      check: "(1 <= x) & (x <= 31)"
+    mois_texte:
+      type: str
+      nullable: false
+      isin:
+        - Janvier
+        - Février
+        - Mars
+        - Avril
+        - Mai
+        - Juin
+        - Juillet
+        - Août
+        - Septembre
+        - Octobre
+        - Novembre
+        - Décembre
+    semaine:
+      type: int
+      nullable: false
+      check: "(1 <= x) & (x <= 53)"
+    annee_semaine:
+      type: str
+      nullable: false
+    jour_semaine:
+      type: str
+      nullable: false
+      isin:
+        - Lundi
+        - Mardi
+        - Mercredi
+        - Jeudi
+        - Vendredi
+        - Samedi
+        - Dimanche
+    est_weekend:
+      type: bool
+      nullable: false
+    est_jour_ferie:
+      type: bool
+      nullable: false
+    est_vacances_scolaires:
+      type: bool
+      nullable: true
+    phase_journee:
+      type: str
+      nullable: true
+      isin:
+        - matinée
+        - après-midi
+        - nuit
+        - déjeuner
+        - ""
+    concerne_plongee:
+      type: bool
+      nullable: false
+    implique_wingfoil:
+      type: bool
+      nullable: false
+    avec_clandestins:
+      type: bool
+      nullable: false
+    distance_cote_metres:
+      type: float
+      nullable: true
+      check: "x >= 0"
+    distance_cote_milles_nautiques:
+      type: float
+      nullable: true
+      check: "x >= 0"
+    est_dans_stm:
+      type: bool
+      nullable: false
+    nom_stm:
+      type: str
+      nullable: true
+    est_dans_dst:
+      type: bool
+      nullable: false
+    nom_dst:
+      type: str
+      nullable: true
+    prefecture_maritime:
+      type: str
+      nullable: true
+    maree_port:
+      type: str
+      nullable: true
+    maree_coefficient:
+      type: float
+      nullable: true
+      check: "(0 <= x) & (x <= 120)"
+    maree_categorie:
+      type: str
+      nullable: true
+
+  operations:
+    operation_id:
+      type: int
+      nullable: false
+      unique: true
+    type_operation:
+      type: str
+      nullable: true
+    pourquoi_alerte:
+      type: str
+      nullable: true
+    moyen_alerte:
+      type: str
+      nullable: true
+    qui_alerte:
+      type: str
+      nullable: true
+    categorie_qui_alerte:
+      type: str
+      nullable: true
+    cross:
+      type: str
+      nullable: false
+    departement:
+      type: str
+      nullable: true
+    est_metropolitain:
+      type: bool
+      nullable: false
+    evenement:
+      type: str
+      nullable: true
+    categorie_evenement:
+      type: str
+      nullable: true
+    autorite:
+      type: str
+      nullable: true
+    seconde_autorite:
+      type: str
+      nullable: true
+    zone_responsabilite:
+      type: str
+      nullable: true
+    latitude:
+      type: float
+      nullable: true
+      check: "(-90 <= x) & (x <= 90)"
+    longitude:
+      type: float
+      nullable: true
+      check: "(-180 <= x) & (x <= 180)"
+    vent_direction:
+      type: float
+      nullable: true
+      check: "(0 <= x) & (x <= 360)"
+    vent_direction_categorie:
+      type: str
+      nullable: true
+    vent_force:
+      type: float
+      nullable: true
+      check: "x >= 0"
+    mer_force:
+      type: float
+      nullable: true
+      check: "x >= 0"
+    date_heure_reception_alerte:
+      type: datetime
+      nullable: false
+    date_heure_fin_operation:
+      type: datetime
+      nullable: true
+    numero_sitrep:
+      type: int
+      nullable: false
+      check: "x >= 0"
+    cross_sitrep:
+      type: str
+      nullable: false
+    fuseau_horaire:
+      type: str
+      nullable: false
+    systeme_source:
+      type: str
+      nullable: false
+
+  resultats_humain:
+    operation_id:
+      type: int
+      nullable: false
+    categorie_personne:
+      type: str
+      nullable: false
+    resultat_humain:
+      type: str
+      nullable: false
+    nombre:
+      type: int
+      nullable: false
+      check: "(x >= 0)"
+    dont_nombre_blesse:
+      type: int
+      nullable: false
+      check: "(x >= 0)"
+
+lazy_validation_method: True
