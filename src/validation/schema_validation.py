@@ -68,12 +68,7 @@ def valider_csv(csv_path, schema, lazy=True):
         schema.validate(df, lazy=lazy)
         df.to_csv(valid_file, index=False)
 
-        return print({
-            "file": csv_path.name,
-            "nb_erreurs": 0,
-            "nb_lignes_valides": len(df),
-            "nb_lignes_rejetees": 0,
-        })
+        return df
 
     except SchemaErrors as e:
         errors_df = e.failure_cases
@@ -92,11 +87,6 @@ def valider_csv(csv_path, schema, lazy=True):
         rejected_df.to_csv(rejected_file, index=False)
         errors_df.to_csv(errors_file, index=False)
 
-        return print({
-            "file": csv_path.name,
-            "nb_erreurs": len(errors_df),                     # violations
-            "nb_lignes_rejetees": errors_df["index"].nunique(), # lignes impactées
-            "nb_lignes_valides": len(valid_df)
-        })
+        return valid_df
         
     
