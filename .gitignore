@@ -1,5 +1,48 @@
+# Fichiers sensibles
 .env
+*.env.local
+.env.production
+
+# Données
 data/
+
+# IDE
 .vscode
+.idea/
+*.swp
+*.swo
+
+# Python
 .venv
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
 .python-version
+*.egg-info/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# Base de données locale
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic
+# Ne pas ignorer alembic/ mais vous pouvez ignorer certains fichiers temporaires
+# alembic/versions/*.pyc
+
+divers
+loader.py
+__pycache__
