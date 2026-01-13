@@ -1,0 +1,272 @@
+"""Schema de l'entite Operation.
+
+Ce fichier definit le schema complet pour les operations
+de sauvetage maritime.
+
+Pour ajouter un nouveau champ:
+1. Ajouter un FieldSchema dans la liste fields
+2. Specifier la section appropriee
+3. Ajouter l'enum_ref si necessaire (dans enums.py)
+"""
+
+from src.schema.definitions import (
+    EntitySchema,
+    FieldSchema,
+    FormSection,
+    WidgetType,
+)
+
+OPERATION_SCHEMA = EntitySchema(
+    name="operation",
+    model_class="Operation",
+    crud_instance="crud_operation",
+    primary_key="operation_id",
+    display_name="Operation",
+    display_name_plural="Operations",
+    sections=[
+        FormSection(
+            name="identification",
+            label="Identification",
+            columns=2,
+            order=1,
+        ),
+        FormSection(
+            name="localisation",
+            label="Localisation",
+            columns=2,
+            order=2,
+        ),
+        FormSection(
+            name="meteo",
+            label="Conditions meteo",
+            columns=4,
+            collapsible=True,
+            expanded=False,
+            order=3,
+        ),
+        FormSection(
+            name="bilan",
+            label="Bilan",
+            columns=2,
+            order=4,
+        ),
+    ],
+    fields=[
+        # =====================================================================
+        # Section: Identification
+        # =====================================================================
+        FieldSchema(
+            name="operation_id",
+            label="ID Operation",
+            widget=WidgetType.NUMBER_INPUT,
+            required=True,
+            min_value=1,
+            step=1,
+            help_text="Identifiant unique de l'operation",
+            section="identification",
+            order=1,
+            visible_in_list=True,
+            list_order=1,
+            editable=True,  # Editable en creation, desactive en edition via disabled_fields
+        ),
+        FieldSchema(
+            name="numero_sitrep",
+            label="Numero SITREP",
+            widget=WidgetType.TEXT_INPUT,
+            max_chars=50,
+            help_text="Numero du rapport SITREP",
+            section="identification",
+            order=2,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="date_operation",
+            label="Date de l'operation",
+            widget=WidgetType.DATE_INPUT,
+            help_text="Date de l'intervention",
+            section="identification",
+            order=3,
+            visible_in_list=True,
+            list_order=2,
+        ),
+        FieldSchema(
+            name="heure_operation",
+            label="Heure",
+            widget=WidgetType.TIME_INPUT,
+            help_text="Heure de debut de l'intervention",
+            section="identification",
+            order=4,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="type_operation",
+            label="Type d'operation",
+            widget=WidgetType.SELECTBOX,
+            enum_ref="TYPE_OPERATION",
+            help_text="Type principal de l'operation",
+            section="identification",
+            order=5,
+            visible_in_list=True,
+            list_order=3,
+        ),
+        FieldSchema(
+            name="sous_type_operation",
+            label="Sous-type",
+            widget=WidgetType.TEXT_INPUT,
+            max_chars=100,
+            help_text="Sous-categorie de l'operation",
+            section="identification",
+            order=6,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="cross",
+            label="CROSS",
+            widget=WidgetType.SELECTBOX,
+            enum_ref="CROSS_VALUES",
+            help_text="Centre Regional de coordination",
+            section="identification",
+            order=7,
+            visible_in_list=True,
+            list_order=4,
+        ),
+        # =====================================================================
+        # Section: Localisation
+        # =====================================================================
+        FieldSchema(
+            name="departement",
+            label="Departement",
+            widget=WidgetType.TEXT_INPUT,
+            max_chars=3,
+            help_text="Code departement (ex: 56, 2A)",
+            section="localisation",
+            order=1,
+            visible_in_list=True,
+            list_order=5,
+        ),
+        FieldSchema(
+            name="zone_responsabilite",
+            label="Zone de responsabilite",
+            widget=WidgetType.TEXT_INPUT,
+            max_chars=50,
+            section="localisation",
+            order=2,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="latitude",
+            label="Latitude",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=-90.0,
+            max_value=90.0,
+            step=0.000001,
+            format_str="%.6f",
+            help_text="Latitude WGS84 (-90 a 90)",
+            section="localisation",
+            order=3,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="longitude",
+            label="Longitude",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=-180.0,
+            max_value=180.0,
+            step=0.000001,
+            format_str="%.6f",
+            help_text="Longitude WGS84 (-180 a 180)",
+            section="localisation",
+            order=4,
+            visible_in_list=False,
+        ),
+        # =====================================================================
+        # Section: Meteo
+        # =====================================================================
+        FieldSchema(
+            name="vent_direction",
+            label="Direction vent",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=0,
+            max_value=360,
+            step=1,
+            help_text="Direction en degres (0-360)",
+            section="meteo",
+            order=1,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="vent_force",
+            label="Force vent",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=0,
+            max_value=12,
+            step=1,
+            help_text="Echelle Beaufort (0-12)",
+            section="meteo",
+            order=2,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="mer_force",
+            label="Etat de mer",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=0,
+            max_value=9,
+            step=1,
+            help_text="Echelle Douglas (0-9)",
+            section="meteo",
+            order=3,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="meteo",
+            label="Conditions meteo",
+            widget=WidgetType.TEXT_INPUT,
+            max_chars=100,
+            help_text="Description des conditions meteorologiques",
+            section="meteo",
+            order=4,
+            visible_in_list=False,
+        ),
+        # =====================================================================
+        # Section: Bilan
+        # =====================================================================
+        FieldSchema(
+            name="nombre_personnes_impliquees",
+            label="Personnes impliquees",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=0,
+            step=1,
+            default=0,
+            help_text="Nombre total de personnes impliquees",
+            section="bilan",
+            order=1,
+            visible_in_list=True,
+            list_order=6,
+        ),
+        FieldSchema(
+            name="nombre_moyens_engages",
+            label="Moyens engages",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=0,
+            step=1,
+            default=0,
+            help_text="Nombre de moyens de secours engages",
+            section="bilan",
+            order=2,
+            visible_in_list=False,
+        ),
+        FieldSchema(
+            name="duree_intervention",
+            label="Duree (min)",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=0,
+            step=1,
+            help_text="Duree totale de l'intervention en minutes",
+            section="bilan",
+            order=3,
+            visible_in_list=True,
+            list_order=7,
+        ),
+    ],
+)
