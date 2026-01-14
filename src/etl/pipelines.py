@@ -5,11 +5,12 @@ from dotenv import load_dotenv
 from etl.extract import load_config, extract_url
 from etl.load import load_df_to_db
 from validation.schema_validation import build_dataframe_schema, valider_csv
-from database.connection import create_postgres_engine
+from database.connection import create_postgres_engine, execute_sql_file
 
 import time
 import pandas as pd
 from functools import wraps
+
 
 load_dotenv()
 
@@ -130,23 +131,26 @@ def pipeline_db_cleaned() -> None:
         on="operation_id",
         how="left"
     )
-
-    print(df_operations.head())
     
-    engine = create_postgres_engine(
-        host=os.getenv("DB_HOST"),
-        database=os.getenv("DB_DATABASE"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD")
-    )
+    print(dfs_validated.keys())
+    
+    # engine = create_postgres_engine(
+    #     host=os.getenv("DB_HOST"),
+    #     database=os.getenv("DB_DATABASE"),
+    #     user=os.getenv("DB_USER"),
+    #     password=os.getenv("DB_PASSWORD")
+    # )
 
-        # Chargement des données validées dans le schéma CLEANED
-        # load_df_to_db(
-        #     df=df,
-        #     table_name=schema_name,
-        #     engine=engine,
-        #     if_exists="replace",
-        #     schema="clean"  # à supprimer si non nécessaire
-        # )
+    # execute_sql_file("sql/clean_tables.sql", engine)
+
+    # #Chargement des données validées dans le schéma CLEANED
+    # for schema_name, df in dfs_validated.items():
+    #     load_df_to_db(
+    #         df=df,
+    #         table_name=schema_name,
+    #         engine=engine,
+    #         if_exists="append",
+    #         schema="clean"  # à supprimer si non nécessaire
+    # )
 
     pass
