@@ -223,13 +223,17 @@ def login_required() -> bool:
 
 def logout():
     """Déconnecter l'utilisateur et réinitialiser la session."""
+    # Créer l'authenticator pour accéder à la gestion du cookie
+    authenticator = create_authenticator()
+
+    # Utiliser la méthode native qui supprime le cookie
+    # location='unrendered' exécute la logique sans afficher de bouton
+    authenticator.logout(location='unrendered')
+
+    # Nettoyer les clés de session personnalisées
     keys_to_clear = [
-        "username",
-        "name",
         "role",
         "authenticated",
-        "authentication_status",
-        "logout",
     ]
 
     for key in keys_to_clear:
