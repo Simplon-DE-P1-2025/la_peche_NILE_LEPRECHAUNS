@@ -11,28 +11,75 @@ from .connection import Base
 class Operation(Base):
     """Table principale des opérations de sauvetage SECMAR"""
     __tablename__ = "operations"
-    operation_id = Column(Integer, primary_key=True)
-    date_heure_reception = Column(DateTime, nullable=False)
-    cross_nom = Column(String(100))
-    evenement_type = Column(String(200))
-    latitude = Column(Float)
-    longitude = Column(Float)
-    zone_marine = Column(String(100))
-    departement = Column(String(100))
-    commune = Column(String(200))
-    vent_direction = Column(String(50))
-    vent_force = Column(Integer)
-    mer_force = Column(Integer)
-    temperature_eau = Column(Float)
-    assistance_type = Column(String(200))
-    categorie = Column(String(100))
-    phase_journee = Column(String(50))
-    saison = Column(String(50))
-    pavillon = Column(String(100))
-    commentaire = Column(Text)
 
-    # Relations (1 opération → plusieurs flotteurs, 1 bilan)
-    flotteurs = relationship(
+    # Clé primaire
+    operation_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Identification
+    numero_sitrep: Mapped[Optional[str]] = mapped_column(String(50))
+    cross_sitrep: Mapped[Optional[str]] = mapped_column(String(100))
+    date_operation: Mapped[Optional[date]] = mapped_column(Date)
+    heure_operation: Mapped[Optional[time]] = mapped_column(Time)
+    type_operation: Mapped[Optional[str]] = mapped_column(String(100))
+    sous_type_operation: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Alerte SECMAR
+    pourquoi_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+    moyen_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+    qui_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+    categorie_qui_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Localisation
+    cross: Mapped[Optional[str]] = mapped_column(String(50))
+    departement: Mapped[Optional[str]] = mapped_column(String(3))
+    est_metropolitain: Mapped[Optional[bool]] = mapped_column(Boolean)
+    zone_responsabilite: Mapped[Optional[str]] = mapped_column(String(50))
+    latitude: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 6))
+    longitude: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 6))
+
+    # Contexte opération SECMAR
+    evenement: Mapped[Optional[str]] = mapped_column(String(100))
+    categorie_evenement: Mapped[Optional[str]] = mapped_column(String(100))
+    autorite: Mapped[Optional[str]] = mapped_column(String(100))
+    seconde_autorite: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Conditions météo
+    vent_direction: Mapped[Optional[int]] = mapped_column(Integer)
+    vent_direction_categorie: Mapped[Optional[str]] = mapped_column(String(50))
+    vent_force: Mapped[Optional[int]] = mapped_column(Integer)
+    mer_force: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Temporel SECMAR
+    date_heure_reception_alerte: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+    date_heure_fin_operation: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+    fuseau_horaire: Mapped[Optional[str]] = mapped_column(String(50))
+    systeme_source: Mapped[Optional[str]] = mapped_column(String(50))
+
+    # Enrichissement MCD
+    est_jour_ferie: Mapped[bool] = mapped_column(Boolean, default=False)
+    est_vacances_scolaires: Mapped[bool] = mapped_column(Boolean, default=False)
+    phase_journee: Mapped[Optional[str]] = mapped_column(String(50))
+    concerne_plongee: Mapped[bool] = mapped_column(Boolean, default=False)
+    implique_wingfoil: Mapped[bool] = mapped_column(Boolean, default=False)
+    distance_cote_metres: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 2))
+    distance_cote_milles_nautiques: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 4))
+    est_dans_stm: Mapped[bool] = mapped_column(Boolean, default=False)
+    nom_stm: Mapped[Optional[str]] = mapped_column(String(100))
+    est_dans_dst: Mapped[bool] = mapped_column(Boolean, default=False)
+    nom_dst: Mapped[Optional[str]] = mapped_column(String(100))
+    prefecture_maritime: Mapped[Optional[str]] = mapped_column(String(100))
+    maree_port: Mapped[Optional[str]] = mapped_column(String(100))
+    maree_coefficient: Mapped[Optional[int]] = mapped_column(Integer)
+    maree_categorie: Mapped[Optional[str]] = mapped_column(String(50))
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relations
+    flotteurs: Mapped[List["Flotteur"]] = relationship(
         "Flotteur",
         back_populates="operation",
         cascade="all, delete-orphan"
@@ -48,6 +95,24 @@ class Operation(Base):
     def __repr__(self):
         return f"<Operation(id={self.operation_id}, type={self.evenement_type})>"
 
+    def to_dict(self) -> dict:
+        """Convertir en dictionnaire."""
+        return {
+            "operation_id": self.operation_id,
+            "numero_sitrep": self.numero_sitrep,
+            "cross_sitrep": self.cross_sitrep,
+            "date_operation": str(self.date_operation) if self.date_operation else None,
+            "type_operation": self.type_operation,
+            "cross": self.cross,
+            "departement": self.departement,
+            "est_metropolitain": self.est_metropolitain,
+            "latitude": float(self.latitude) if self.latitude else None,
+            "longitude": float(self.longitude) if self.longitude else None,
+            "evenement": self.evenement,
+            "categorie_evenement": self.categorie_evenement,
+            "autorite": self.autorite,
+            "prefecture_maritime": self.prefecture_maritime,
+        }
 
 class Flotteur(Base):
     """Table des flotteurs impliqués dans l'opération (navires en détresse)"""
@@ -63,18 +128,11 @@ class Flotteur(Base):
         nullable=False
     )
 
-    # Informations sur le flotteur
-    nom = Column(String(100))
-    type_flotteur = Column(String(100))
-    longueur = Column(Float)
-    largeur = Column(Float)
-    materiau = Column(String(50))
-    propulsion = Column(String(100))
-    immatriculation = Column(String(100))
-    port_attache = Column(String(200))
-    annee_construction = Column(Integer)
-    puissance_moteur = Column(Integer)
-    jauge = Column(Float)
+    type_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
+    categorie_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
+    pavillon: Mapped[Optional[str]] = mapped_column(String(50))
+    immatriculation: Mapped[Optional[str]] = mapped_column(String(50))
+    resultat_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
 
     # Relation
     operation = relationship("Operation", back_populates="flotteurs")
