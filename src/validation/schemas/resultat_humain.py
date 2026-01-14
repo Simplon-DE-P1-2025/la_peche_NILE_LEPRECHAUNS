@@ -26,7 +26,8 @@ class ResultatHumainSchema(pa.DataFrameModel):
     # Informations
     categorie_personne: Optional[Series[str]] = pa.Field(nullable=True)
     resultat_humain: Optional[Series[str]] = pa.Field(nullable=True)
-    nombre: Series[int] = pa.Field(ge=1, coerce=True)
+    nombre: Series[int] = pa.Field(ge=0, coerce=True)
+    dont_nombre_blesse: Series[int] = pa.Field(ge=0, coerce=True, default=0)
 
     class Config:
         """Configuration du schema."""
@@ -77,7 +78,8 @@ def create_resultat_humain_schema(
                 mode=enum_mode,
                 nullable=True,
             ),
-            "nombre": Column(pa.Int, Check.ge(1), coerce=True),
+            "nombre": Column(pa.Int, Check.ge(0), coerce=True),
+            "dont_nombre_blesse": Column(pa.Int, Check.ge(0), coerce=True),
         },
         checks=[
             # Check coherence resultat/nombre

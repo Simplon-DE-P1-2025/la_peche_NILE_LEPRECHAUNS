@@ -31,6 +31,7 @@ for dir_path in [RAW_DIR, PROCESSED_DIR]:
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql://secmar:secmar@localhost:5432/secmar_db"
 )
+DB_SCHEMA = os.getenv("DB_SCHEMA", "clean")
 DB_ECHO = os.getenv("DB_ECHO", "false").lower() == "true"
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))

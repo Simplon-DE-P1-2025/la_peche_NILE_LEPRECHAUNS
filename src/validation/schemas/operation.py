@@ -17,7 +17,13 @@ import pandera as pa
 from pandera import Column, Check, DataFrameSchema
 from pandera.typing import Series
 
-from src.database.enums import TYPE_OPERATION, CROSS_VALUES
+from src.database.enums import (
+    TYPE_OPERATION,
+    CROSS_VALUES,
+    PHASE_JOURNEE,
+    MAREE_CATEGORIE,
+    PREFECTURE_MARITIME,
+)
 from src.validation.base import (
     ValidationMode,
     create_enum_column,
@@ -34,14 +40,20 @@ class OperationSchema(pa.DataFrameModel):
     # Identification
     operation_id: Series[int] = pa.Field(ge=1, coerce=True)
     numero_sitrep: Optional[Series[str]] = pa.Field(nullable=True)
-    date_operation: Optional[Series[pa.DateTime]] = pa.Field(nullable=True, coerce=True)
-    heure_operation: Optional[Series[str]] = pa.Field(nullable=True)
+    cross_sitrep: Optional[Series[str]] = pa.Field(nullable=True)
     type_operation: Optional[Series[str]] = pa.Field(nullable=True)
     sous_type_operation: Optional[Series[str]] = pa.Field(nullable=True)
-    cross: Optional[Series[str]] = pa.Field(nullable=True)
+
+    # Alerte SECMAR
+    pourquoi_alerte: Optional[Series[str]] = pa.Field(nullable=True)
+    moyen_alerte: Optional[Series[str]] = pa.Field(nullable=True)
+    qui_alerte: Optional[Series[str]] = pa.Field(nullable=True)
+    categorie_qui_alerte: Optional[Series[str]] = pa.Field(nullable=True)
 
     # Localisation
+    cross: Optional[Series[str]] = pa.Field(nullable=True)
     departement: Optional[Series[str]] = pa.Field(nullable=True)
+    est_metropolitain: Optional[Series[bool]] = pa.Field(nullable=True, coerce=True)
     zone_responsabilite: Optional[Series[str]] = pa.Field(nullable=True)
     latitude: Optional[Series[float]] = pa.Field(
         nullable=True, ge=-90.0, le=90.0, coerce=True
@@ -50,24 +62,56 @@ class OperationSchema(pa.DataFrameModel):
         nullable=True, ge=-180.0, le=180.0, coerce=True
     )
 
+    # Contexte operation SECMAR
+    evenement: Optional[Series[str]] = pa.Field(nullable=True)
+    categorie_evenement: Optional[Series[str]] = pa.Field(nullable=True)
+    autorite: Optional[Series[str]] = pa.Field(nullable=True)
+    seconde_autorite: Optional[Series[str]] = pa.Field(nullable=True)
+
     # Meteo
     vent_direction: Optional[Series[int]] = pa.Field(
         nullable=True, ge=0, le=360, coerce=True
     )
+    vent_direction_categorie: Optional[Series[str]] = pa.Field(nullable=True)
     vent_force: Optional[Series[int]] = pa.Field(
         nullable=True, ge=0, le=12, coerce=True
     )  # Beaufort
     mer_force: Optional[Series[int]] = pa.Field(
         nullable=True, ge=0, le=9, coerce=True
     )  # Douglas
-    meteo: Optional[Series[str]] = pa.Field(nullable=True)
 
-    # Bilan
-    nombre_personnes_impliquees: Series[int] = pa.Field(ge=0, coerce=True, default=0)
-    nombre_moyens_engages: Series[int] = pa.Field(ge=0, coerce=True, default=0)
-    duree_intervention: Optional[Series[int]] = pa.Field(
+    # Temporel SECMAR
+    date_heure_reception_alerte: Optional[Series[pa.DateTime]] = pa.Field(
+        nullable=True, coerce=True
+    )
+    date_heure_fin_operation: Optional[Series[pa.DateTime]] = pa.Field(
+        nullable=True, coerce=True
+    )
+    fuseau_horaire: Optional[Series[str]] = pa.Field(nullable=True)
+    systeme_source: Optional[Series[str]] = pa.Field(nullable=True)
+
+    # Enrichissement MCD
+    est_jour_ferie: Optional[Series[bool]] = pa.Field(nullable=True, coerce=True)
+    est_vacances_scolaires: Optional[Series[bool]] = pa.Field(nullable=True, coerce=True)
+    phase_journee: Optional[Series[str]] = pa.Field(nullable=True)
+    concerne_plongee: Optional[Series[bool]] = pa.Field(nullable=True, coerce=True)
+    implique_wingfoil: Optional[Series[bool]] = pa.Field(nullable=True, coerce=True)
+    distance_cote_metres: Optional[Series[float]] = pa.Field(
         nullable=True, ge=0, coerce=True
     )
+    distance_cote_milles_nautiques: Optional[Series[float]] = pa.Field(
+        nullable=True, ge=0, coerce=True
+    )
+    est_dans_stm: Optional[Series[bool]] = pa.Field(nullable=True, coerce=True)
+    nom_stm: Optional[Series[str]] = pa.Field(nullable=True)
+    est_dans_dst: Optional[Series[bool]] = pa.Field(nullable=True, coerce=True)
+    nom_dst: Optional[Series[str]] = pa.Field(nullable=True)
+    prefecture_maritime: Optional[Series[str]] = pa.Field(nullable=True)
+    maree_port: Optional[Series[str]] = pa.Field(nullable=True)
+    maree_coefficient: Optional[Series[int]] = pa.Field(
+        nullable=True, ge=20, le=120, coerce=True
+    )
+    maree_categorie: Optional[Series[str]] = pa.Field(nullable=True)
 
     class Config:
         """Configuration du schema."""
@@ -103,8 +147,7 @@ def create_operation_schema(
             # Identification
             "operation_id": Column(pa.Int, Check.ge(1), coerce=True),
             "numero_sitrep": Column(pa.String, nullable=True, coerce=True),
-            "date_operation": Column(pa.DateTime, nullable=True, coerce=True),
-            "heure_operation": Column(pa.String, nullable=True, coerce=True),
+            "cross_sitrep": Column(pa.String, nullable=True, coerce=True),
             "type_operation": create_enum_column(
                 "type_operation",
                 TYPE_OPERATION,
@@ -112,14 +155,20 @@ def create_operation_schema(
                 nullable=True,
             ),
             "sous_type_operation": Column(pa.String, nullable=True, coerce=True),
+            # Alerte SECMAR
+            "pourquoi_alerte": Column(pa.String, nullable=True, coerce=True),
+            "moyen_alerte": Column(pa.String, nullable=True, coerce=True),
+            "qui_alerte": Column(pa.String, nullable=True, coerce=True),
+            "categorie_qui_alerte": Column(pa.String, nullable=True, coerce=True),
+            # Localisation
             "cross": create_enum_column(
                 "cross",
                 CROSS_VALUES,
                 mode=enum_mode,
                 nullable=True,
             ),
-            # Localisation
             "departement": Column(pa.String, nullable=True, coerce=True),
+            "est_metropolitain": Column(pa.Bool, nullable=True, coerce=True),
             "zone_responsabilite": Column(pa.String, nullable=True, coerce=True),
             "latitude": Column(
                 pa.Float, Check.in_range(-90, 90), nullable=True, coerce=True
@@ -127,24 +176,56 @@ def create_operation_schema(
             "longitude": Column(
                 pa.Float, Check.in_range(-180, 180), nullable=True, coerce=True
             ),
+            # Contexte operation SECMAR
+            "evenement": Column(pa.String, nullable=True, coerce=True),
+            "categorie_evenement": Column(pa.String, nullable=True, coerce=True),
+            "autorite": Column(pa.String, nullable=True, coerce=True),
+            "seconde_autorite": Column(pa.String, nullable=True, coerce=True),
             # Meteo
             "vent_direction": Column(
                 pa.Int, Check.in_range(0, 360), nullable=True, coerce=True
             ),
+            "vent_direction_categorie": Column(pa.String, nullable=True, coerce=True),
             "vent_force": Column(
                 pa.Int, Check.in_range(0, 12), nullable=True, coerce=True
             ),
             "mer_force": Column(
                 pa.Int, Check.in_range(0, 9), nullable=True, coerce=True
             ),
-            "meteo": Column(pa.String, nullable=True, coerce=True),
-            # Bilan
-            "nombre_personnes_impliquees": Column(
-                pa.Int, Check.ge(0), coerce=True, default=0
+            # Temporel SECMAR
+            "date_heure_reception_alerte": Column(
+                pa.DateTime, nullable=True, coerce=True
             ),
-            "nombre_moyens_engages": Column(pa.Int, Check.ge(0), coerce=True, default=0),
-            "duree_intervention": Column(
-                pa.Int, Check.ge(0), nullable=True, coerce=True
+            "date_heure_fin_operation": Column(pa.DateTime, nullable=True, coerce=True),
+            "fuseau_horaire": Column(pa.String, nullable=True, coerce=True),
+            "systeme_source": Column(pa.String, nullable=True, coerce=True),
+            # Enrichissement MCD
+            "est_jour_ferie": Column(pa.Bool, nullable=True, coerce=True),
+            "est_vacances_scolaires": Column(pa.Bool, nullable=True, coerce=True),
+            "phase_journee": create_enum_column(
+                "phase_journee", PHASE_JOURNEE, mode=enum_mode, nullable=True
+            ),
+            "concerne_plongee": Column(pa.Bool, nullable=True, coerce=True),
+            "implique_wingfoil": Column(pa.Bool, nullable=True, coerce=True),
+            "distance_cote_metres": Column(
+                pa.Float, Check.ge(0), nullable=True, coerce=True
+            ),
+            "distance_cote_milles_nautiques": Column(
+                pa.Float, Check.ge(0), nullable=True, coerce=True
+            ),
+            "est_dans_stm": Column(pa.Bool, nullable=True, coerce=True),
+            "nom_stm": Column(pa.String, nullable=True, coerce=True),
+            "est_dans_dst": Column(pa.Bool, nullable=True, coerce=True),
+            "nom_dst": Column(pa.String, nullable=True, coerce=True),
+            "prefecture_maritime": create_enum_column(
+                "prefecture_maritime", PREFECTURE_MARITIME, mode=enum_mode, nullable=True
+            ),
+            "maree_port": Column(pa.String, nullable=True, coerce=True),
+            "maree_coefficient": Column(
+                pa.Int, Check.in_range(20, 120), nullable=True, coerce=True
+            ),
+            "maree_categorie": create_enum_column(
+                "maree_categorie", MAREE_CATEGORIE, mode=enum_mode, nullable=True
             ),
         },
         checks=[

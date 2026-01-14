@@ -58,11 +58,14 @@ Fonctions fournies :
 from contextlib import contextmanager
 from typing import Generator, Any
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine, text, MetaData
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 
-from src.config import DATABASE_URL, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
+from src.config import DATABASE_URL, DB_SCHEMA, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
+
+# Base class for all SQLAlchemy models - utilise le schéma configuré (clean par défaut)
+Base = declarative_base(metadata=MetaData(schema=DB_SCHEMA))
 
 
 # =============================================================================
@@ -90,8 +93,11 @@ SessionLocal = sessionmaker(
 # Context Managers
 # =============================================================================
 @contextmanager
-def get_session() -> Generator[Session, None, None]:
+def get_session(schema: str = None) -> Generator[Session, None, None]:
     """Context manager pour obtenir une session SQLAlchemy.
+
+    Args:
+        schema: Schéma à utiliser (défaut: DB_SCHEMA de config)
 
     Usage:
         with get_session() as session:
@@ -101,6 +107,9 @@ def get_session() -> Generator[Session, None, None]:
     """
     session = SessionLocal()
     try:
+        # Définir le search_path vers le schéma demandé
+        target_schema = schema or DB_SCHEMA
+        session.execute(text(f"SET search_path TO {target_schema}"))
         yield session
         session.commit()
     except Exception:
@@ -111,8 +120,11 @@ def get_session() -> Generator[Session, None, None]:
 
 
 @contextmanager
-def get_raw_connection():
+def get_raw_connection(schema: str = None):
     """Context manager pour connexion raw (psycopg2).
+
+    Args:
+        schema: Schéma à utiliser (défaut: DB_SCHEMA de config)
 
     Utile pour :
     - Bulk operations avec execute_values
@@ -123,9 +135,17 @@ def get_raw_connection():
         with get_raw_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM operations")
+
+        # Pour schéma raw:
+        with get_raw_connection(schema='raw') as conn:
+            ...
     """
     conn = engine.raw_connection()
     try:
+        # Définir le search_path vers le schéma demandé
+        target_schema = schema or DB_SCHEMA
+        with conn.cursor() as cur:
+            cur.execute(f"SET search_path TO {target_schema}")
         yield conn
         conn.commit()
     except Exception:
