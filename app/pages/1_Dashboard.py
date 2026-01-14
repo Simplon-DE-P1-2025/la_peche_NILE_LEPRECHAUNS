@@ -362,7 +362,7 @@ if not df_map.empty and 'latitude' in df_map.columns and 'longitude' in df_map.c
             lat="latitude",
             lon="longitude",
             color="type_operation",
-            size="nombre_personnes_impliquees",
+            size="nombre_impliques",
             hover_data=["date_heure_reception_alerte", "cross", "nombre_sauves"],
             zoom=5,
             center={"lat": 46.5, "lon": -1.5},

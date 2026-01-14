@@ -29,10 +29,8 @@ def render_header(operation: Any) -> None:
     with col3:
         st.caption("Date alerte")
         st.markdown(str(operation.date_heure_reception_alerte or "-"))
-        st.caption("Durée")
-        st.markdown(f"{operation.duree_intervention or '-'} min")
-        st.caption("Personnes")
-        st.markdown(str(operation.nombre_personnes_impliquees or 0))
+        st.caption("Date fin")
+        st.markdown(str(operation.date_heure_fin_operation or "-"))
         if operation.latitude and operation.longitude:
             st.caption("Position")
             st.markdown(f"{operation.latitude:.4f}, {operation.longitude:.4f}")

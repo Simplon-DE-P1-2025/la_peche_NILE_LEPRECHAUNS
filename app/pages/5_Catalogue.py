@@ -4,7 +4,6 @@ Cette page affiche:
 - Navigation entre les 3 entites principales (Operation, Flotteur, ResultatHumain)
 - Dictionnaire des champs avec types, descriptions SECMAR et contraintes
 - Valeurs des enumerations
-- Diagramme des relations entre entites
 
 Auteur: Equipe Sprint 3-4
 Date: Janvier 2026
@@ -262,50 +261,6 @@ with tab_res:
                 st.markdown(f"**{field.label}** (`{field.enum_ref}`)")
                 st.write(", ".join(values))
                 st.markdown("---")
-
-
-# =============================================================================
-# Section: Relations entre entites
-# =============================================================================
-st.divider()
-st.subheader("🔗 Relations entre entites")
-
-# Diagramme Mermaid simplifie
-mermaid_relations = """
-erDiagram
-    operations ||--o{ flotteurs : "1:N"
-    operations ||--o{ resultats_humain : "1:N"
-
-    operations {
-        int operation_id PK
-        string cross
-        string type_operation
-        timestamp date_heure_reception_alerte
-    }
-
-    flotteurs {
-        int flotteur_id PK
-        int operation_id FK
-        string type_flotteur
-        string resultat_flotteur
-    }
-
-    resultats_humain {
-        int resultat_id PK
-        int operation_id FK
-        string categorie_personne
-        string resultat_humain
-        int nombre
-    }
-"""
-
-# Essayer d'afficher avec streamlit-mermaid, sinon fallback sur code
-try:
-    from streamlit_mermaid import st_mermaid
-    st_mermaid(mermaid_relations, height=350)
-except ImportError:
-    st.code(mermaid_relations, language="mermaid")
-    st.caption("Pour un rendu visuel, installer: `pip install streamlit-mermaid`")
 
 
 # =============================================================================
