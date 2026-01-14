@@ -16,4 +16,5 @@ dependencies = [
     "streamlit>=1.52.2",
     "streamlit-authenticator>=0.3.0",
     "plotly>=5.18.0",
+    "streamlit-mermaid>=0.3.0",
 ]

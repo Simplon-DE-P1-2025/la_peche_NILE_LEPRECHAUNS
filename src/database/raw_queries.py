@@ -709,7 +709,7 @@ def get_audit_stats() -> dict:
 
 
 def get_all_tables() -> list[str]:
-    """Liste des tables du schema public.
+    """Liste des tables du schema clean.
 
     Returns:
         Liste des noms de tables
@@ -717,7 +717,7 @@ def get_all_tables() -> list[str]:
     sql = """
     SELECT table_name
     FROM information_schema.tables
-    WHERE table_schema = 'public'
+    WHERE table_schema = 'clean'
       AND table_type = 'BASE TABLE'
     ORDER BY table_name
     """
@@ -743,7 +743,7 @@ def get_table_schema(table_name: str) -> list[dict]:
         is_nullable,
         column_default
     FROM information_schema.columns
-    WHERE table_schema = 'public'
+    WHERE table_schema = 'clean'
       AND table_name = :table_name
     ORDER BY ordinal_position
     """
@@ -765,7 +765,7 @@ def get_primary_keys() -> list[dict]:
         ON tc.constraint_name = kcu.constraint_name
         AND tc.table_schema = kcu.table_schema
     WHERE tc.constraint_type = 'PRIMARY KEY'
-      AND tc.table_schema = 'public'
+      AND tc.table_schema = 'clean'
     ORDER BY tc.table_name
     """
     return execute_raw_sql(sql)
@@ -792,7 +792,7 @@ def get_foreign_keys() -> list[dict]:
         ON ccu.constraint_name = tc.constraint_name
         AND ccu.table_schema = tc.table_schema
     WHERE tc.constraint_type = 'FOREIGN KEY'
-      AND tc.table_schema = 'public'
+      AND tc.table_schema = 'clean'
     ORDER BY tc.table_name
     """
     return execute_raw_sql(sql)
@@ -813,7 +813,7 @@ def get_table_indexes(table_name: str = None) -> list[dict]:
         indexname,
         indexdef
     FROM pg_indexes
-    WHERE schemaname = 'public'
+    WHERE schemaname = 'clean'
       AND (:table_name IS NULL OR tablename = :table_name)
     ORDER BY tablename, indexname
     """
