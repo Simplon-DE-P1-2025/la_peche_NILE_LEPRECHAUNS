@@ -59,7 +59,10 @@ from contextlib import contextmanager
 from typing import Generator, Any
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
+
+# Base class for all SQLAlchemy models
+Base = declarative_base()
 from sqlalchemy.pool import QueuePool
 
 from src.config import DATABASE_URL, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW

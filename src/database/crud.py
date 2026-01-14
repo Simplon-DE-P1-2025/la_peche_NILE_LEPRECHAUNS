@@ -248,14 +248,14 @@ class CRUDOperation(CRUDBase[Operation]):
         if type_operation:
             conditions.append(Operation.type_operation == type_operation)
         if date_debut:
-            conditions.append(Operation.date_operation >= date_debut)
+            conditions.append(Operation.date_heure_reception_alerte >= date_debut)
         if date_fin:
-            conditions.append(Operation.date_operation <= date_fin)
+            conditions.append(Operation.date_heure_reception_alerte <= date_fin)
 
         if conditions:
             query = query.where(and_(*conditions))
 
-        query = query.order_by(Operation.date_operation.desc())
+        query = query.order_by(Operation.date_heure_reception_alerte.desc())
         query = query.offset(skip).limit(limit)
 
         return list(session.scalars(query).all())
@@ -280,9 +280,9 @@ class CRUDOperation(CRUDBase[Operation]):
         if type_operation:
             conditions.append(Operation.type_operation == type_operation)
         if date_debut:
-            conditions.append(Operation.date_operation >= date_debut)
+            conditions.append(Operation.date_heure_reception_alerte >= date_debut)
         if date_fin:
-            conditions.append(Operation.date_operation <= date_fin)
+            conditions.append(Operation.date_heure_reception_alerte <= date_fin)
 
         if conditions:
             query = query.where(and_(*conditions))

@@ -14,8 +14,6 @@ CREATE TABLE IF NOT EXISTS operations (
     type_operation VARCHAR(100),
     numero_sitrep VARCHAR(50),
     cross_sitrep VARCHAR(100),
-    date_operation DATE,
-    heure_operation TIME,
     sous_type_operation VARCHAR(100),
     -- Alerte SECMAR
     pourquoi_alerte VARCHAR(100),
@@ -73,7 +71,7 @@ CREATE TABLE IF NOT EXISTS flotteurs (
     type_flotteur VARCHAR(100),
     categorie_flotteur VARCHAR(100),
     pavillon VARCHAR(50),
-    immatriculation VARCHAR(50),
+    numero_immatriculation VARCHAR(50),
     resultat_flotteur VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -133,11 +131,7 @@ SELECT
         WHEN rh.resultat_humain IN ('Personne disparue', 'Disparu')
         THEN rh.nombre ELSE 0
     END), 0)::INTEGER as nombre_disparus,
-    COALESCE(SUM(COALESCE(rh.dont_nombre_blesse, 0)), 0)::INTEGER +
-    COALESCE(SUM(CASE
-        WHEN rh.resultat_humain IN ('Blesse', 'Blessé')
-        THEN rh.nombre ELSE 0
-    END), 0)::INTEGER as nombre_blesses,
+    COALESCE(SUM(COALESCE(rh.dont_nombre_blesse, 0)), 0)::INTEGER as nombre_blesses,
     COALESCE(SUM(CASE
         WHEN rh.resultat_humain IN ('Personne secourue', 'Sain et sauf', 'Retrouve', 'Personne retrouvee')
         THEN rh.nombre ELSE 0
@@ -154,7 +148,7 @@ GROUP BY o.operation_id;
 -- =============================================================================
 -- Index pour les performances
 -- =============================================================================
-CREATE INDEX IF NOT EXISTS idx_operations_date ON operations(date_operation);
+CREATE INDEX IF NOT EXISTS idx_operations_date ON operations(date_heure_reception_alerte);
 CREATE INDEX IF NOT EXISTS idx_operations_cross ON operations("cross");
 CREATE INDEX IF NOT EXISTS idx_operations_type ON operations(type_operation);
 CREATE INDEX IF NOT EXISTS idx_operations_prefecture ON operations(prefecture_maritime);
@@ -236,32 +230,33 @@ ON CONFLICT (username) DO NOTHING;
 
 -- Opérations de test (avec champs SECMAR + enrichissement)
 INSERT INTO operations (
-    operation_id, numero_sitrep, cross_sitrep, date_operation, type_operation,
+    operation_id, numero_sitrep, cross_sitrep, type_operation,
     "cross", departement, est_metropolitain, latitude, longitude,
     evenement, categorie_evenement, autorite,
-    prefecture_maritime, phase_journee, distance_cote_metres
+    prefecture_maritime, phase_journee, distance_cote_metres,
+    date_heure_reception_alerte
 )
 VALUES
-    (1, 'SITREP-2024-001', 'Etel-2024-001', '2024-01-15', 'SAR',
+    (1, 'SITREP-2024-001', 'Etel-2024-001', 'SAR',
      'Etel', '56', TRUE, 47.5000, -3.2000,
      'Homme a la mer', 'Accident', 'Prefet maritime Atlantique',
-     'Atlantique', 'Matin', 2500),
-    (2, 'SITREP-2024-002', 'Corsen-2024-001', '2024-01-16', 'MAS',
+     'Atlantique', 'Matin', 2500, '2024-01-15 08:30:00'),
+    (2, 'SITREP-2024-002', 'Corsen-2024-001', 'MAS',
      'Corsen', '29', TRUE, 48.4500, -4.7500,
      'Avarie moteur', 'Assistance', 'Prefet maritime Atlantique',
-     'Atlantique', 'Apres-midi', 5000),
-    (3, 'SITREP-2024-003', 'Jobourg-2024-001', '2024-01-17', 'DIV',
+     'Atlantique', 'Apres-midi', 5000, '2024-01-16 14:00:00'),
+    (3, 'SITREP-2024-003', 'Jobourg-2024-001', 'DIV',
      'Jobourg', '50', TRUE, 49.6800, -1.9000,
      'Plongee', 'Plongee', 'Prefet maritime Manche',
-     'Manche et mer du Nord', 'Matin', 1200),
-    (4, 'SITREP-2024-004', 'LaGarde-2024-001', '2024-01-18', 'SAR',
+     'Manche et mer du Nord', 'Matin', 1200, '2024-01-17 10:15:00'),
+    (4, 'SITREP-2024-004', 'LaGarde-2024-001', 'SAR',
      'La Garde', '83', TRUE, 43.1000, 5.9300,
      'Naufrage', 'Accident', 'Prefet maritime Mediterranee',
-     'Mediterranee', 'Soir', 8000),
-    (5, 'SITREP-2024-005', 'GrisNez-2024-001', '2024-01-19', 'SUR',
+     'Mediterranee', 'Soir', 8000, '2024-01-18 19:45:00'),
+    (5, 'SITREP-2024-005', 'GrisNez-2024-001', 'SUR',
      'Gris-Nez', '62', TRUE, 50.8700, 1.5800,
      'Surveillance', 'Surveillance', 'Prefet maritime Manche',
-     'Manche et mer du Nord', 'Nuit', 3500)
+     'Manche et mer du Nord', 'Nuit', 3500, '2024-01-19 02:00:00')
 ON CONFLICT (operation_id) DO NOTHING;
 
 -- Flotteurs de test (avec numero_ordre)

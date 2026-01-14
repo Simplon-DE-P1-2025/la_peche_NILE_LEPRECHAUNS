@@ -68,15 +68,27 @@ FLOTTEUR_SCHEMA = EntitySchema(
             editable=False,  # Lie au parent
         ),
         FieldSchema(
+            name="numero_ordre",
+            label="Ordre",
+            widget=WidgetType.NUMBER_INPUT,
+            min_value=1,
+            step=1,
+            help_text="Numero d'ordre du flotteur dans l'operation",
+            section="identification",
+            order=3,
+            visible_in_list=True,
+            list_order=2,
+        ),
+        FieldSchema(
             name="type_flotteur",
             label="Type de flotteur",
             widget=WidgetType.SELECTBOX,
             enum_ref="TYPE_FLOTTEUR",
             help_text="Type d'embarcation",
             section="identification",
-            order=3,
+            order=4,
             visible_in_list=True,
-            list_order=2,
+            list_order=3,
         ),
         FieldSchema(
             name="categorie_flotteur",
@@ -85,9 +97,9 @@ FLOTTEUR_SCHEMA = EntitySchema(
             max_chars=100,
             help_text="Categorie du flotteur",
             section="identification",
-            order=4,
+            order=5,
             visible_in_list=True,
-            list_order=3,
+            list_order=4,
         ),
         # =====================================================================
         # Section: Caracteristiques
@@ -102,10 +114,10 @@ FLOTTEUR_SCHEMA = EntitySchema(
             section="caracteristiques",
             order=1,
             visible_in_list=True,
-            list_order=4,
+            list_order=5,
         ),
         FieldSchema(
-            name="immatriculation",
+            name="numero_immatriculation",
             label="Immatriculation",
             widget=WidgetType.TEXT_INPUT,
             max_chars=50,
@@ -126,7 +138,7 @@ FLOTTEUR_SCHEMA = EntitySchema(
             section="bilan",
             order=1,
             visible_in_list=True,
-            list_order=5,
+            list_order=6,
         ),
     ],
 )

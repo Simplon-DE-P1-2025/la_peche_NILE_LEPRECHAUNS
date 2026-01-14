@@ -28,7 +28,7 @@ class FlotteurSchema(pa.DataFrameModel):
     type_flotteur: Optional[Series[str]] = pa.Field(nullable=True)
     categorie_flotteur: Optional[Series[str]] = pa.Field(nullable=True)
     pavillon: Optional[Series[str]] = pa.Field(nullable=True)
-    immatriculation: Optional[Series[str]] = pa.Field(nullable=True)
+    numero_immatriculation: Optional[Series[str]] = pa.Field(nullable=True)
 
     # Resultat
     resultat_flotteur: Optional[Series[str]] = pa.Field(nullable=True)
@@ -66,7 +66,7 @@ def create_flotteur_schema(
             ),
             "categorie_flotteur": Column(pa.String, nullable=True, coerce=True),
             "pavillon": Column(pa.String, nullable=True, coerce=True),
-            "immatriculation": Column(pa.String, nullable=True, coerce=True),
+            "numero_immatriculation": Column(pa.String, nullable=True, coerce=True),
             # Resultat
             "resultat_flotteur": create_enum_column(
                 "resultat_flotteur",
