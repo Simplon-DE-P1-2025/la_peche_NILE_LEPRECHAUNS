@@ -2,9 +2,13 @@
 models.py - Définir les tables avec relations selon le MCD maritime
 Version compatible SQLAlchemy 1.4+ et 2.0+
 """
-from sqlalchemy import Column, String, Integer, DateTime, Float, ForeignKey, Text, Boolean
-from sqlalchemy.orm import relationship
-from datetime import datetime
+from typing import Optional, List
+from datetime import datetime, date, time
+from decimal import Decimal
+
+from sqlalchemy import Column, String, Integer, DateTime, Float, ForeignKey, Text, Boolean, Date, Time, TIMESTAMP, DECIMAL, ARRAY
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from .connection import Base
 
 
@@ -18,8 +22,6 @@ class Operation(Base):
     # Identification
     numero_sitrep: Mapped[Optional[str]] = mapped_column(String(50))
     cross_sitrep: Mapped[Optional[str]] = mapped_column(String(100))
-    date_operation: Mapped[Optional[date]] = mapped_column(Date)
-    heure_operation: Mapped[Optional[time]] = mapped_column(Time)
     type_operation: Mapped[Optional[str]] = mapped_column(String(100))
     sous_type_operation: Mapped[Optional[str]] = mapped_column(String(100))
 
@@ -85,10 +87,9 @@ class Operation(Base):
         cascade="all, delete-orphan"
     )
 
-    resultat_humain = relationship(
+    resultats_humain: Mapped[List["ResultatHumain"]] = relationship(
         "ResultatHumain",
         back_populates="operation",
-        uselist=False,  # 1 à 1
         cascade="all, delete-orphan"
     )
 
@@ -101,7 +102,7 @@ class Operation(Base):
             "operation_id": self.operation_id,
             "numero_sitrep": self.numero_sitrep,
             "cross_sitrep": self.cross_sitrep,
-            "date_operation": str(self.date_operation) if self.date_operation else None,
+            "date_heure_reception_alerte": str(self.date_heure_reception_alerte) if self.date_heure_reception_alerte else None,
             "type_operation": self.type_operation,
             "cross": self.cross,
             "departement": self.departement,
@@ -119,75 +120,94 @@ class Flotteur(Base):
     __tablename__ = "flotteurs"
 
     # Clé primaire
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    flotteur_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Clé étrangère
-    operation_id = Column(
+    operation_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("operations.operation_id", ondelete="CASCADE"),
         nullable=False
     )
 
+    # Ordre dans l'opération
+    numero_ordre: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Caractéristiques
     type_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
     categorie_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
     pavillon: Mapped[Optional[str]] = mapped_column(String(50))
-    immatriculation: Mapped[Optional[str]] = mapped_column(String(50))
+    numero_immatriculation: Mapped[Optional[str]] = mapped_column(String(50))
     resultat_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relation
     operation = relationship("Operation", back_populates="flotteurs")
 
     def __repr__(self):
-        return f"<Flotteur(id={self.id}, nom={self.nom}, type={self.type_flotteur})>"
+        return f"<Flotteur(id={self.flotteur_id}, type={self.type_flotteur})>"
 
 
 class ResultatHumain(Base):
-    """Table du bilan humain de l'opération"""
-    __tablename__ = "bilan_humain"
+    """Table des résultats humains de l'opération (lignes individuelles par catégorie)"""
+    __tablename__ = "resultats_humain"
 
     # Clé primaire
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    resultat_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # Clé étrangère (1 à 1)
-    operation_id = Column(
+    # Clé étrangère (1 à N - plusieurs résultats par opération)
+    operation_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("operations.operation_id", ondelete="CASCADE"),
-        unique=True,
         nullable=False
     )
 
-    # Compteurs humains
-    nb_personnes_impliquees = Column(Integer, default=0)
-    nb_personnes_secourues = Column(Integer, default=0)
-    nb_personnes_assistees = Column(Integer, default=0)
-    nb_decedes = Column(Integer, default=0)
-    nb_disparus = Column(Integer, default=0)
-    nb_blesses = Column(Integer, default=0)
-    nb_blesses_legers = Column(Integer, default=0)
-    nb_blesses_graves = Column(Integer, default=0)
-    nb_sains_et_saufs = Column(Integer, default=0)
-    nb_indemnes = Column(Integer, default=0)
+    # Informations
+    categorie_personne: Mapped[Optional[str]] = mapped_column(String(50))
+    resultat_humain: Mapped[Optional[str]] = mapped_column(String(50))
+    nombre: Mapped[int] = mapped_column(Integer, default=0)
+    dont_nombre_blesse: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     # Relation
-    operation = relationship("Operation", back_populates="resultat_humain")
+    operation = relationship("Operation", back_populates="resultats_humain")
 
     def __repr__(self):
-        return f"<ResultatHumain(operation_id={self.operation_id}, impliquées={self.nb_personnes_impliquees})>"
+        return f"<ResultatHumain(id={self.resultat_id}, categorie={self.categorie_personne}, resultat={self.resultat_humain})>"
 
 
 class AuditLog(Base):
-    """Table pour tracer les modifications"""
-    __tablename__ = "audit_logs"
+    """Table d'audit pour tracer les modifications"""
+    __tablename__ = "audit_log"
 
-    # Colonnes
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime, default=datetime.now)
-    utilisateur = Column(String(100))
-    action = Column(String(50))  # INSERT, UPDATE, DELETE
-    table_nom = Column(String(100))
+    # Clé primaire
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Informations de l'audit
+    table_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    operation_type: Mapped[str] = mapped_column(String(10), nullable=False)  # INSERT, UPDATE, DELETE
+    record_id: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Valeurs avant/après (JSONB pour PostgreSQL)
+    old_values = Column(JSONB)
+    new_values = Column(JSONB)
+    changed_fields = Column(ARRAY(Text))
+
+    # Métadonnées
+    user_id: Mapped[str] = mapped_column(String(50), default='system')
+    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
 
     def __repr__(self):
-        return f"<AuditLog(id={self.id}, action={self.action}, table={self.table_nom})>"
+        return f"<AuditLog(id={self.id}, table={self.table_name}, operation={self.operation_type})>"
 
 
 class Users(Base):
@@ -199,9 +219,30 @@ class Users(Base):
     username = Column(String(100), unique=True, nullable=False)
     email = Column(String(200), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
+    role = Column(String(20), default='viewer')
     created_at = Column(DateTime, default=datetime.now)
     last_login = Column(DateTime)
     is_active = Column(Boolean, default=True)
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username})>"
+
+
+# Alias for backward compatibility
+User = Users
+
+
+class OperationStats(Base):
+    """VIEW operations_stats - Statistiques calculées depuis resultats_humain (lecture seule)"""
+    __tablename__ = "operations_stats"
+
+    operation_id = Column(Integer, primary_key=True)
+    nombre_decedes = Column(Integer)
+    nombre_disparus = Column(Integer)
+    nombre_blesses = Column(Integer)
+    nombre_sauves = Column(Integer)
+    nombre_impliques = Column(Integer)
+    nombre_assistances = Column(Integer)
+
+    def __repr__(self):
+        return f"<OperationStats(operation_id={self.operation_id})>"

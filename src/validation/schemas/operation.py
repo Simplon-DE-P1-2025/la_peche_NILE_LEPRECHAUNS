@@ -41,8 +41,6 @@ class OperationSchema(pa.DataFrameModel):
     operation_id: Series[int] = pa.Field(ge=1, coerce=True)
     numero_sitrep: Optional[Series[str]] = pa.Field(nullable=True)
     cross_sitrep: Optional[Series[str]] = pa.Field(nullable=True)
-    date_operation: Optional[Series[pa.DateTime]] = pa.Field(nullable=True, coerce=True)
-    heure_operation: Optional[Series[str]] = pa.Field(nullable=True)
     type_operation: Optional[Series[str]] = pa.Field(nullable=True)
     sous_type_operation: Optional[Series[str]] = pa.Field(nullable=True)
 
@@ -150,8 +148,6 @@ def create_operation_schema(
             "operation_id": Column(pa.Int, Check.ge(1), coerce=True),
             "numero_sitrep": Column(pa.String, nullable=True, coerce=True),
             "cross_sitrep": Column(pa.String, nullable=True, coerce=True),
-            "date_operation": Column(pa.DateTime, nullable=True, coerce=True),
-            "heure_operation": Column(pa.String, nullable=True, coerce=True),
             "type_operation": create_enum_column(
                 "type_operation",
                 TYPE_OPERATION,

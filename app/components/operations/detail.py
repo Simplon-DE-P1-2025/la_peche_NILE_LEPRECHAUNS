@@ -27,8 +27,8 @@ def render_header(operation: Any) -> None:
         st.markdown(str(operation.departement or "-"))
 
     with col3:
-        st.caption("Date")
-        st.markdown(str(operation.date_operation or "-"))
+        st.caption("Date alerte")
+        st.markdown(str(operation.date_heure_reception_alerte or "-"))
         st.caption("Durée")
         st.markdown(f"{operation.duree_intervention or '-'} min")
         st.caption("Personnes")

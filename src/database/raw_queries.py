@@ -35,14 +35,14 @@ def get_kpis() -> dict:
     sql = """
     SELECT
         COUNT(*) as total_operations,
-        COUNT(DISTINCT "cross") as nb_cross,
-        COUNT(DISTINCT departement) as nb_departements,
-        COALESCE(SUM(nombre_personnes_impliquees), 0) as total_personnes,
-        ROUND(AVG(duree_intervention)::numeric, 2) as duree_moyenne,
-        MIN(date_operation) as premiere_operation,
-        MAX(date_operation) as derniere_operation
-    FROM operations
-    WHERE date_operation IS NOT NULL
+        COUNT(DISTINCT o."cross") as nb_cross,
+        COUNT(DISTINCT o.departement) as nb_departements,
+        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
+        MIN(o.date_heure_reception_alerte) as premiere_operation,
+        MAX(o.date_heure_reception_alerte) as derniere_operation
+    FROM operations o
+    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+    WHERE o.date_heure_reception_alerte IS NOT NULL
     """
     result = execute_raw_sql(sql)
     return result[0] if result else {}
@@ -63,13 +63,13 @@ def get_kpis_by_period(
     sql = """
     SELECT
         COUNT(*) as total_operations,
-        COALESCE(SUM(nombre_personnes_impliquees), 0) as total_personnes,
-        ROUND(AVG(duree_intervention)::numeric, 2) as duree_moyenne,
-        COUNT(DISTINCT "cross") as nb_cross
-    FROM operations
+        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
+        COUNT(DISTINCT o."cross") as nb_cross
+    FROM operations o
+    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
     WHERE 1=1
-        AND (:date_debut IS NULL OR date_operation >= :date_debut)
-        AND (:date_fin IS NULL OR date_operation <= :date_fin)
+        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
     """
     params = {"date_debut": date_debut, "date_fin": date_fin}
     result = execute_raw_sql(sql, params)
@@ -85,16 +85,16 @@ def get_operations_by_cross() -> list[dict]:
     """Nombre d'opérations par CROSS.
 
     Returns:
-        Liste de dictionnaires {cross, total_operations, total_personnes, duree_moyenne}
+        Liste de dictionnaires {cross, total_operations, total_personnes}
     """
     sql = """
     SELECT
-        COALESCE("cross", 'Non renseigné') as cross,
+        COALESCE(o."cross", 'Non renseigné') as cross,
         COUNT(*) as total_operations,
-        COALESCE(SUM(nombre_personnes_impliquees), 0) as total_personnes,
-        ROUND(AVG(duree_intervention)::numeric, 2) as duree_moyenne
-    FROM operations
-    GROUP BY COALESCE("cross", 'Non renseigné')
+        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+    FROM operations o
+    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+    GROUP BY COALESCE(o."cross", 'Non renseigné')
     ORDER BY total_operations DESC
     """
     return execute_raw_sql(sql)
@@ -129,12 +129,13 @@ def get_operations_by_department(limit: int = 20) -> list[dict]:
     """
     sql = """
     SELECT
-        departement,
+        o.departement,
         COUNT(*) as total_operations,
-        COALESCE(SUM(nombre_personnes_impliquees), 0) as total_personnes
-    FROM operations
-    WHERE departement IS NOT NULL
-    GROUP BY departement
+        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+    FROM operations o
+    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+    WHERE o.departement IS NOT NULL
+    GROUP BY o.departement
     ORDER BY total_operations DESC
     LIMIT :limit
     """
@@ -199,14 +200,15 @@ def get_operations_timeline(
 
     sql = f"""
     SELECT
-        DATE_TRUNC('{date_trunc}', date_operation) as periode,
+        DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte) as periode,
         COUNT(*) as total_operations,
-        COALESCE(SUM(nombre_personnes_impliquees), 0) as total_personnes
-    FROM operations
-    WHERE date_operation IS NOT NULL
-        AND (:date_debut IS NULL OR date_operation >= :date_debut)
-        AND (:date_fin IS NULL OR date_operation <= :date_fin)
-    GROUP BY DATE_TRUNC('{date_trunc}', date_operation)
+        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+    FROM operations o
+    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+    WHERE o.date_heure_reception_alerte IS NOT NULL
+        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+    GROUP BY DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte)
     ORDER BY periode
     """
     return execute_raw_sql(sql, {"date_debut": date_debut, "date_fin": date_fin})
@@ -220,11 +222,11 @@ def get_monthly_comparison() -> list[dict]:
     """
     sql = """
     SELECT
-        EXTRACT(YEAR FROM date_operation)::int as annee,
-        EXTRACT(MONTH FROM date_operation)::int as mois,
+        EXTRACT(YEAR FROM date_heure_reception_alerte)::int as annee,
+        EXTRACT(MONTH FROM date_heure_reception_alerte)::int as mois,
         COUNT(*) as total_operations
     FROM operations
-    WHERE date_operation IS NOT NULL
+    WHERE date_heure_reception_alerte IS NOT NULL
     GROUP BY annee, mois
     ORDER BY annee, mois
     """
@@ -239,12 +241,12 @@ def get_yearly_stats() -> list[dict]:
     """
     sql = """
     SELECT
-        EXTRACT(YEAR FROM date_operation)::int as annee,
+        EXTRACT(YEAR FROM o.date_heure_reception_alerte)::int as annee,
         COUNT(*) as total_operations,
-        COALESCE(SUM(nombre_personnes_impliquees), 0) as total_personnes,
-        ROUND(AVG(duree_intervention)::numeric, 2) as duree_moyenne
-    FROM operations
-    WHERE date_operation IS NOT NULL
+        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+    FROM operations o
+    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+    WHERE o.date_heure_reception_alerte IS NOT NULL
     GROUP BY annee
     ORDER BY annee DESC
     """
@@ -320,8 +322,8 @@ def get_bilan_by_cross_filtered(
     FROM operations o
     LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
     WHERE 1=1
-        AND (:date_debut IS NULL OR o.date_operation >= :date_debut)
-        AND (:date_fin IS NULL OR o.date_operation <= :date_fin)
+        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
     GROUP BY COALESCE(o."cross", 'Non renseigné')
     ORDER BY sauves DESC
     """
@@ -351,8 +353,8 @@ def get_bilan_by_period(
     FROM operations o
     LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
     WHERE 1=1
-        AND (:date_debut IS NULL OR o.date_operation >= :date_debut)
-        AND (:date_fin IS NULL OR o.date_operation <= :date_fin)
+        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
     """
     result = execute_raw_sql(sql, {"date_debut": date_debut, "date_fin": date_fin})
     return result[0] if result else {}
@@ -388,16 +390,15 @@ def get_flotteurs_stats(limit: int = 15) -> list[dict]:
         limit: Nombre maximum de types à retourner
 
     Returns:
-        Liste de dictionnaires {type_flotteur, total, personnes_moyenne, longueur_moyenne}
+        Liste de dictionnaires {type_flotteur, total, categorie_flotteur}
     """
     sql = """
     SELECT
         COALESCE(type_flotteur, 'Non renseigné') as type_flotteur,
-        COUNT(*) as total,
-        ROUND(AVG(nombre_personnes)::numeric, 2) as personnes_moyenne,
-        ROUND(AVG(longueur)::numeric, 2) as longueur_moyenne
+        COALESCE(categorie_flotteur, 'Non renseigné') as categorie_flotteur,
+        COUNT(*) as total
     FROM flotteurs
-    GROUP BY COALESCE(type_flotteur, 'Non renseigné')
+    GROUP BY COALESCE(type_flotteur, 'Non renseigné'), COALESCE(categorie_flotteur, 'Non renseigné')
     ORDER BY total DESC
     LIMIT :limit
     """
@@ -444,15 +445,15 @@ def get_top_operations_by_personnes(limit: int = 10) -> list[dict]:
     WITH ranked_ops AS (
         SELECT
             o.operation_id,
-            o.date_operation,
+            o.date_heure_reception_alerte,
             o.type_operation,
             o."cross",
-            o.nombre_personnes_impliquees,
+            COALESCE(s.nombre_impliques, 0) as nombre_impliques,
             COALESCE(s.nombre_sauves, 0) as nombre_sauves,
-            ROW_NUMBER() OVER (ORDER BY o.nombre_personnes_impliquees DESC) as rang
+            ROW_NUMBER() OVER (ORDER BY COALESCE(s.nombre_impliques, 0) DESC) as rang
         FROM operations o
         LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
-        WHERE o.nombre_personnes_impliquees > 0
+        WHERE s.nombre_impliques > 0
     )
     SELECT * FROM ranked_ops WHERE rang <= :limit
     """
@@ -468,7 +469,7 @@ def get_operations_with_casualties() -> list[dict]:
     sql = """
     SELECT
         o.operation_id,
-        o.date_operation,
+        o.date_heure_reception_alerte,
         o.type_operation,
         o."cross",
         o.departement,
@@ -478,7 +479,7 @@ def get_operations_with_casualties() -> list[dict]:
     FROM operations o
     INNER JOIN operations_stats s ON o.operation_id = s.operation_id
     WHERE s.nombre_decedes > 0 OR s.nombre_disparus > 0
-    ORDER BY total_victimes DESC, o.date_operation DESC
+    ORDER BY total_victimes DESC, o.date_heure_reception_alerte DESC
     LIMIT 50
     """
     return execute_raw_sql(sql)
@@ -503,7 +504,7 @@ def search_operations_advanced(
         departement: Filtrer par département
         date_debut: Date minimum
         date_fin: Date maximum
-        min_personnes: Minimum de personnes impliquées
+        min_personnes: Minimum de personnes impliquées (via operations_stats)
         has_casualties: Si True, uniquement les opérations avec victimes
         limit: Nombre maximum de résultats
         offset: Décalage pour pagination
@@ -514,12 +515,11 @@ def search_operations_advanced(
     sql = """
     SELECT
         o.operation_id,
-        o.date_operation,
+        o.date_heure_reception_alerte,
         o.type_operation,
         o."cross",
         o.departement,
-        o.nombre_personnes_impliquees,
-        o.duree_intervention,
+        COALESCE(s.nombre_impliques, 0) as nombre_impliques,
         COALESCE(s.nombre_sauves, 0) as nombre_sauves,
         COALESCE(s.nombre_decedes, 0) as nombre_decedes,
         COALESCE(s.nombre_disparus, 0) as nombre_disparus
@@ -529,13 +529,13 @@ def search_operations_advanced(
         AND (:cross IS NULL OR o."cross" = :cross)
         AND (:type_operation IS NULL OR o.type_operation = :type_operation)
         AND (:departement IS NULL OR o.departement = :departement)
-        AND (:date_debut IS NULL OR o.date_operation >= :date_debut)
-        AND (:date_fin IS NULL OR o.date_operation <= :date_fin)
-        AND (:min_personnes IS NULL OR o.nombre_personnes_impliquees >= :min_personnes)
+        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+        AND (:min_personnes IS NULL OR COALESCE(s.nombre_impliques, 0) >= :min_personnes)
         AND (:has_casualties IS NULL OR
              (:has_casualties = true AND (s.nombre_decedes > 0 OR s.nombre_disparus > 0)) OR
              (:has_casualties = false AND COALESCE(s.nombre_decedes, 0) = 0 AND COALESCE(s.nombre_disparus, 0) = 0))
-    ORDER BY o.date_operation DESC
+    ORDER BY o.date_heure_reception_alerte DESC
     LIMIT :limit OFFSET :offset
     """
     return execute_raw_sql(
@@ -593,15 +593,14 @@ def get_operations_dataframe(
     sql = """
     SELECT
         o.operation_id,
-        o.date_operation,
+        o.date_heure_reception_alerte,
         o.type_operation,
         o.sous_type_operation,
         o."cross",
         o.departement,
         o.latitude,
         o.longitude,
-        o.nombre_personnes_impliquees,
-        o.duree_intervention,
+        COALESCE(s.nombre_impliques, 0) as nombre_impliques,
         COALESCE(s.nombre_sauves, 0) as nombre_sauves,
         COALESCE(s.nombre_decedes, 0) as nombre_decedes,
         COALESCE(s.nombre_disparus, 0) as nombre_disparus,
@@ -610,9 +609,9 @@ def get_operations_dataframe(
     LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
     WHERE 1=1
         AND (:cross IS NULL OR o."cross" = :cross)
-        AND (:date_debut IS NULL OR o.date_operation >= :date_debut)
-        AND (:date_fin IS NULL OR o.date_operation <= :date_fin)
-    ORDER BY o.date_operation DESC
+        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+    ORDER BY o.date_heure_reception_alerte DESC
     LIMIT :limit
     """
     return query_to_dataframe(
