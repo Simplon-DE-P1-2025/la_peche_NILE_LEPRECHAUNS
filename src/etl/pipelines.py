@@ -8,6 +8,7 @@ from validation.schema_validation import build_dataframe_schema, valider_csv
 from database.connection import create_postgres_engine
 
 import time
+import pandas as pd
 from functools import wraps
 
 load_dotenv()
@@ -76,3 +77,76 @@ def pipeline_db_raw() -> None:
             if_exists="replace",
             schema="raw_test"  # à supprimer si non nécessaire
         )
+
+def pipeline_db_cleaned() -> None:
+    """
+    Pipeline ETL pour l'alimentation de la base de données CLEANED.
+
+    À implémenter.
+
+    Returns
+    -------
+    None
+    """
+
+    cfg = load_config("config/config_clean.yml")
+
+    # Étape 1 — Extraction des fichiers CSV
+    _data_list = extract_url(
+        dataset_url=cfg['EXTRACT']['dataset_url'],
+        timeout_sec=cfg['EXTRACT']['timeout_sec'],
+        output_dir=cfg['EXTRACT']['output_dir']
+    )
+
+    # Étape 2 — Construction des schémas de validation Pandera
+    data_validation = cfg['DATA_VALIDATION']
+    pandera_schemas = {}
+
+    for schema_name, schema_def in data_validation.items():
+        pandera_schemas[schema_name] = build_dataframe_schema(
+            schema_def, 
+            strict_method=True
+            )
+    
+    # Étape 3 — Validation et chargement en base
+
+    dfs_validated = {}
+
+    for schema_name, schema in pandera_schemas.items():
+        csv_path = Path(f"{cfg['EXTRACT']['output_dir']}/{schema_name}.csv")
+
+        # Validation des données (lazy pour récupérer toutes les erreurs)
+        df = valider_csv(
+            csv_path=csv_path,
+            schema=schema,
+            lazy=True
+        )
+        df_filtered = df.loc[:, schema.columns.keys()]
+        dfs_validated[schema_name] = df_filtered
+
+    df_operations = pd.merge(
+        dfs_validated["operations"],
+        dfs_validated["operations_stats"],
+        on="operation_id",
+        how="left"
+    )
+
+    print(df_operations.head())
+    
+    engine = create_postgres_engine(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_DATABASE"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
+    )
+
+        # Chargement des données validées dans le schéma CLEANED
+        # load_df_to_db(
+        #     df=df,
+        #     table_name=schema_name,
+        #     engine=engine,
+        #     if_exists="replace",
+        #     schema="clean"  # à supprimer si non nécessaire
+        # )
+
+    pass

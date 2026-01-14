@@ -14,7 +14,7 @@ TYPE_MAPPING = {
     "datetime": pa.DateTime
 }
 
-def build_dataframe_schema(schema_dict: dict) -> DataFrameSchema:
+def build_dataframe_schema(schema_dict: dict, strict_method: bool = False) -> DataFrameSchema:
     columns = {}
 
     for col_name, col_props in schema_dict.items():
@@ -45,7 +45,7 @@ def build_dataframe_schema(schema_dict: dict) -> DataFrameSchema:
             unique=unique
         )
 
-    return DataFrameSchema(columns)
+    return DataFrameSchema(columns, strict=strict_method)
 
 def valider_csv(csv_path, schema, lazy=True):
     df = pd.read_csv(csv_path, low_memory=False)
@@ -65,10 +65,10 @@ def valider_csv(csv_path, schema, lazy=True):
     errors_file = errors_dir / f"{base_name}_errors.csv"
 
     try:
-        schema.validate(df, lazy=lazy)
-        df.to_csv(valid_file, index=False)
+        valid_df = schema.validate(df, lazy=lazy)
+        valid_df.to_csv(valid_file, index=False)
 
-        return df
+        return valid_df
 
     except SchemaErrors as e:
         errors_df = e.failure_cases
@@ -83,6 +83,7 @@ def valider_csv(csv_path, schema, lazy=True):
         rejected_df = df.loc[error_indexes]
         valid_df = df.drop(error_indexes)
 
+        #valid_df = schema.validate(valid_df, lazy=lazy)
         valid_df.to_csv(valid_file, index=False)
         rejected_df.to_csv(rejected_file, index=False)
         errors_df.to_csv(errors_file, index=False)
