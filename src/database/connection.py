@@ -6,6 +6,7 @@ connection.py - Se connecter à PostgreSQL sur Render.com avec SQLAlchemy
 # from sqlalchemy.orm import sessionmaker, declarative_base
 from typing import Optional
 from sqlalchemy.engine import Engine
+from pathlib import Path
 import os
 
 
@@ -62,7 +63,7 @@ from sqlalchemy import create_engine, text, MetaData
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 
-from src.config import DATABASE_URL, DB_SCHEMA, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
+from config import DATABASE_URL, DB_SCHEMA, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
 
 # Base class for all SQLAlchemy models - utilise le schéma configuré (clean par défaut)
 Base = declarative_base(metadata=MetaData(schema=DB_SCHEMA))
@@ -234,3 +235,22 @@ def drop_tables() -> None:
 
     Base.metadata.drop_all(engine)
     print("Tables supprimées")
+
+def execute_sql_file(sql_file: str, engine: Engine):
+    
+    """
+    Exécute le contenu d'un fichier SQL avec SQLAlchemy.
+
+    Args:
+        sql_file (Path): chemin vers le fichier .sql
+        engine (Engine): moteur SQLAlchemy
+    """
+    sql_file = Path(sql_file)
+
+    if not sql_file.exists():
+        raise FileNotFoundError(f"Fichier SQL introuvable : {sql_file}")
+
+    sql = sql_file.read_text(encoding="utf-8")
+
+    with engine.begin() as conn:
+        conn.execute(text(sql))
