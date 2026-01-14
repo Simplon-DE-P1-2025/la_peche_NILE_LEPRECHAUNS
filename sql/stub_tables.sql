@@ -7,6 +7,10 @@
 -- Usage: psql -d secmar_db -f sql/stub_tables.sql
 -- =============================================================================
 
+-- Créer le schéma clean s'il n'existe pas et l'utiliser
+CREATE SCHEMA IF NOT EXISTS clean;
+SET search_path TO clean;
+
 -- Table des opérations (enrichie avec champs MCD + SECMAR complet)
 CREATE TABLE IF NOT EXISTS operations (
     operation_id INTEGER PRIMARY KEY,
