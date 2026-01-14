@@ -1,50 +1,15 @@
-"""Modèles SQLAlchemy - STUB pour CRUD.
-
-Ces modèles définissent la structure des tables.
-L'équipier doit valider/compléter avec tous les champs.
-
-Tables :
-- Operation : Opérations de sauvetage maritime
-- Flotteur : Embarcations impliquées
-- ResultatHumain : Bilans humains
-- OperationStats : Statistiques par opération -> sera une view
-- User : Utilisateurs de l'application
-- AuditLog : Journal d'audit (lecture seule, alimenté par triggers)
 """
-
-from datetime import date, time, datetime
-from decimal import Decimal
-from typing import List, Optional
-
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Date,
-    Time,
-    Text,
-    DECIMAL,
-    ForeignKey,
-    TIMESTAMP,
-    Boolean,
-    JSON,
-)
-from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+models.py - Définir les tables avec relations selon le MCD maritime
+Version compatible SQLAlchemy 1.4+ et 2.0+
+"""
+from sqlalchemy import Column, String, Integer, DateTime, Float, ForeignKey, Text, Boolean
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from .connection import Base
 
 
-class Base(DeclarativeBase):
-    """Classe de base pour tous les modèles."""
-
-    pass
-
-
-# =============================================================================
-# Table Operations
-# =============================================================================
 class Operation(Base):
-    """Opérations de sauvetage maritime."""
-
+    """Table principale des opérations de sauvetage SECMAR"""
     __tablename__ = "operations"
 
     # Clé primaire
@@ -117,18 +82,18 @@ class Operation(Base):
     flotteurs: Mapped[List["Flotteur"]] = relationship(
         "Flotteur",
         back_populates="operation",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-    resultats_humain: Mapped[List["ResultatHumain"]] = relationship(
-        "ResultatHumain",
-        back_populates="operation",
-        cascade="all, delete-orphan",
-        lazy="selectin",
+        cascade="all, delete-orphan"
     )
 
-    def __repr__(self) -> str:
-        return f"<Operation {self.operation_id} - {self.date_operation}>"
+    resultat_humain = relationship(
+        "ResultatHumain",
+        back_populates="operation",
+        uselist=False,  # 1 à 1
+        cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"<Operation(id={self.operation_id}, type={self.evenement_type})>"
 
     def to_dict(self) -> dict:
         """Convertir en dictionnaire."""
@@ -149,24 +114,19 @@ class Operation(Base):
             "prefecture_maritime": self.prefecture_maritime,
         }
 
-
-# =============================================================================
-# Table Flotteurs
-# =============================================================================
 class Flotteur(Base):
-    """Embarcations impliquées dans les opérations."""
-
+    """Table des flotteurs impliqués dans l'opération (navires en détresse)"""
     __tablename__ = "flotteurs"
 
-    flotteur_id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
-    operation_id: Mapped[int] = mapped_column(
+    # Clé primaire
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # Clé étrangère
+    operation_id = Column(
         Integer,
         ForeignKey("operations.operation_id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=False
     )
-    numero_ordre: Mapped[Optional[int]] = mapped_column(Integer)
 
     type_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
     categorie_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
@@ -174,122 +134,74 @@ class Flotteur(Base):
     immatriculation: Mapped[Optional[str]] = mapped_column(String(50))
     resultat_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
 
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    # Relation
+    operation = relationship("Operation", back_populates="flotteurs")
 
-    # Relation inverse
-    operation: Mapped["Operation"] = relationship(
-        "Operation", back_populates="flotteurs"
-    )
-
-    def __repr__(self) -> str:
-        return f"<Flotteur {self.flotteur_id} - {self.type_flotteur}>"
+    def __repr__(self):
+        return f"<Flotteur(id={self.id}, nom={self.nom}, type={self.type_flotteur})>"
 
 
-# =============================================================================
-# Table Résultats Humains
-# =============================================================================
 class ResultatHumain(Base):
-    """Bilans humains des opérations."""
+    """Table du bilan humain de l'opération"""
+    __tablename__ = "bilan_humain"
 
-    __tablename__ = "resultats_humain"
+    # Clé primaire
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
-    resultat_id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
-    operation_id: Mapped[int] = mapped_column(
+    # Clé étrangère (1 à 1)
+    operation_id = Column(
         Integer,
         ForeignKey("operations.operation_id", ondelete="CASCADE"),
-        nullable=False,
+        unique=True,
+        nullable=False
     )
 
-    categorie_personne: Mapped[Optional[str]] = mapped_column(String(50))
-    resultat_humain: Mapped[Optional[str]] = mapped_column(String(50))
-    nombre: Mapped[int] = mapped_column(Integer, default=0)
-    dont_nombre_blesse: Mapped[int] = mapped_column(Integer, default=0)
+    # Compteurs humains
+    nb_personnes_impliquees = Column(Integer, default=0)
+    nb_personnes_secourues = Column(Integer, default=0)
+    nb_personnes_assistees = Column(Integer, default=0)
+    nb_decedes = Column(Integer, default=0)
+    nb_disparus = Column(Integer, default=0)
+    nb_blesses = Column(Integer, default=0)
+    nb_blesses_legers = Column(Integer, default=0)
+    nb_blesses_graves = Column(Integer, default=0)
+    nb_sains_et_saufs = Column(Integer, default=0)
+    nb_indemnes = Column(Integer, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    # Relation
+    operation = relationship("Operation", back_populates="resultat_humain")
 
-    # Relation inverse
-    operation: Mapped["Operation"] = relationship(
-        "Operation", back_populates="resultats_humain"
-    )
-
-    def __repr__(self) -> str:
-        return f"<ResultatHumain {self.resultat_id} - {self.resultat_humain}>"
-
-
-# =============================================================================
-# VIEW Operations Stats (lecture seule - calculée depuis resultats_humain)
-# =============================================================================
-class OperationStats(Base):
-    """VIEW des statistiques agrégées par opération.
-
-    Cette classe mappe la VIEW PostgreSQL operations_stats.
-    Les données sont calculées automatiquement depuis resultats_humain.
-    LECTURE SEULE - pas de create/update/delete.
-    """
-
-    __tablename__ = "operations_stats"
-
-    operation_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    nombre_decedes: Mapped[int] = mapped_column(Integer)
-    nombre_disparus: Mapped[int] = mapped_column(Integer)
-    nombre_blesses: Mapped[int] = mapped_column(Integer)
-    nombre_sauves: Mapped[int] = mapped_column(Integer)
-    nombre_impliques: Mapped[int] = mapped_column(Integer)
-    nombre_assistances: Mapped[int] = mapped_column(Integer)
-
-    def __repr__(self) -> str:
-        return f"<OperationStats op={self.operation_id}>"
+    def __repr__(self):
+        return f"<ResultatHumain(operation_id={self.operation_id}, impliquées={self.nb_personnes_impliquees})>"
 
 
-# =============================================================================
-# Table Users
-# =============================================================================
-class User(Base):
-    """Utilisateurs de l'application Streamlit."""
+class AuditLog(Base):
+    """Table pour tracer les modifications"""
+    __tablename__ = "audit_logs"
 
+    # Colonnes
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime, default=datetime.now)
+    utilisateur = Column(String(100))
+    action = Column(String(50))  # INSERT, UPDATE, DELETE
+    table_nom = Column(String(100))
+
+    def __repr__(self):
+        return f"<AuditLog(id={self.id}, action={self.action}, table={self.table_nom})>"
+
+
+class Users(Base):
+    """Table des utilisateurs pour l'authentification"""
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    email: Mapped[Optional[str]] = mapped_column(String(100), unique=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(20), default="viewer")
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    last_login: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+    # Colonnes
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(100), unique=True, nullable=False)
+    email = Column(String(200), unique=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    last_login = Column(DateTime)
+    is_active = Column(Boolean, default=True)
 
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
-
-    def __repr__(self) -> str:
-        return f"<User {self.username}>"
-
-
-# =============================================================================
-# Table Audit Log (lecture seule)
-# =============================================================================
-class AuditLog(Base):
-    """Journal d'audit - Alimenté par les triggers PostgreSQL.
-
-    Cette table est en lecture seule depuis l'application.
-    Les triggers INSERT/UPDATE/DELETE sur les autres tables
-    alimentent automatiquement ce journal.
-    """
-
-    __tablename__ = "audit_log"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    table_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    operation_type: Mapped[str] = mapped_column(String(10), nullable=False)
-    record_id: Mapped[Optional[int]] = mapped_column(Integer)
-    old_values = mapped_column(JSONB)
-    new_values = mapped_column(JSONB)
-    changed_fields = mapped_column(ARRAY(Text))
-    user_id: Mapped[Optional[str]] = mapped_column(String(50))
-    timestamp: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
-
-    def __repr__(self) -> str:
-        return f"<AuditLog {self.id} - {self.table_name} {self.operation_type}>"
+    def __repr__(self):
+        return f"<User(id={self.id}, username={self.username})>"

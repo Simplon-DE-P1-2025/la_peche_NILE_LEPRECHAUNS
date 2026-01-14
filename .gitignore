@@ -15,7 +15,7 @@ data/
 # Python
 .venv
 venv/
-__pycache__/
+*__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -45,4 +45,4 @@ Thumbs.db
 
 divers
 loader.py
-__pycache__
+*__pycache__
