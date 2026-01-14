@@ -50,30 +50,45 @@ class Operation(Base):
     # Clé primaire
     operation_id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    # Informations générales
+    # Identification
     numero_sitrep: Mapped[Optional[str]] = mapped_column(String(50))
+    cross_sitrep: Mapped[Optional[str]] = mapped_column(String(100))
     date_operation: Mapped[Optional[date]] = mapped_column(Date)
     heure_operation: Mapped[Optional[time]] = mapped_column(Time)
     type_operation: Mapped[Optional[str]] = mapped_column(String(100))
     sous_type_operation: Mapped[Optional[str]] = mapped_column(String(100))
 
+    # Alerte SECMAR
+    pourquoi_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+    moyen_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+    qui_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+    categorie_qui_alerte: Mapped[Optional[str]] = mapped_column(String(100))
+
     # Localisation
     cross: Mapped[Optional[str]] = mapped_column(String(50))
     departement: Mapped[Optional[str]] = mapped_column(String(3))
+    est_metropolitain: Mapped[Optional[bool]] = mapped_column(Boolean)
     zone_responsabilite: Mapped[Optional[str]] = mapped_column(String(50))
     latitude: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 6))
     longitude: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(10, 6))
 
+    # Contexte opération SECMAR
+    evenement: Mapped[Optional[str]] = mapped_column(String(100))
+    categorie_evenement: Mapped[Optional[str]] = mapped_column(String(100))
+    autorite: Mapped[Optional[str]] = mapped_column(String(100))
+    seconde_autorite: Mapped[Optional[str]] = mapped_column(String(100))
+
     # Conditions météo
     vent_direction: Mapped[Optional[int]] = mapped_column(Integer)
+    vent_direction_categorie: Mapped[Optional[str]] = mapped_column(String(50))
     vent_force: Mapped[Optional[int]] = mapped_column(Integer)
     mer_force: Mapped[Optional[int]] = mapped_column(Integer)
-    meteo: Mapped[Optional[str]] = mapped_column(String(100))
 
-    # Statistiques
-    nombre_personnes_impliquees: Mapped[int] = mapped_column(Integer, default=0)
-    nombre_moyens_engages: Mapped[int] = mapped_column(Integer, default=0)
-    duree_intervention: Mapped[Optional[int]] = mapped_column(Integer)
+    # Temporel SECMAR
+    date_heure_reception_alerte: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+    date_heure_fin_operation: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+    fuseau_horaire: Mapped[Optional[str]] = mapped_column(String(50))
+    systeme_source: Mapped[Optional[str]] = mapped_column(String(50))
 
     # Enrichissement MCD
     est_jour_ferie: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -120,14 +135,18 @@ class Operation(Base):
         return {
             "operation_id": self.operation_id,
             "numero_sitrep": self.numero_sitrep,
+            "cross_sitrep": self.cross_sitrep,
             "date_operation": str(self.date_operation) if self.date_operation else None,
             "type_operation": self.type_operation,
             "cross": self.cross,
             "departement": self.departement,
+            "est_metropolitain": self.est_metropolitain,
             "latitude": float(self.latitude) if self.latitude else None,
             "longitude": float(self.longitude) if self.longitude else None,
-            "nombre_personnes_impliquees": self.nombre_personnes_impliquees,
-            "duree_intervention": self.duree_intervention,
+            "evenement": self.evenement,
+            "categorie_evenement": self.categorie_evenement,
+            "autorite": self.autorite,
+            "prefecture_maritime": self.prefecture_maritime,
         }
 
 
@@ -153,9 +172,6 @@ class Flotteur(Base):
     categorie_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
     pavillon: Mapped[Optional[str]] = mapped_column(String(50))
     immatriculation: Mapped[Optional[str]] = mapped_column(String(50))
-    nom_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
-    longueur: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(6, 2))
-    nombre_personnes: Mapped[int] = mapped_column(Integer, default=0)
     resultat_flotteur: Mapped[Optional[str]] = mapped_column(String(100))
 
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
