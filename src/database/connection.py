@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from typing import Optional
 from sqlalchemy.engine import Engine
 import os
+import pandas as pd
 
 
 def create_postgres_engine(
@@ -46,3 +47,4 @@ def get_session():
         print("❌ Pas de connexion à la base de données!")
         return None
     return SessionLocal()
+
