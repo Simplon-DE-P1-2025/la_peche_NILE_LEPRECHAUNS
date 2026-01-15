@@ -11,7 +11,11 @@ Ce dossier contient les scripts SQL pour initialiser la base de donnees et creer
 | Fichier | Description |
 |---------|-------------|
 | `stub_tables.sql` | Creation des tables et donnees de test |
+| `clean_tables.sql` | Creation des tables alignees sur le MCD SECMAR |
 | `views_kpi.sql` | Vues SQL pour les indicateurs de performance |
+| `check_indexes.sql` | Diagnostic des index et performances |
+| `optimize_performance.sql` | Creation des index et vues materialisees |
+| `refresh_materialized_views.sql` | Rafraichissement des vues materialisees apres ETL |
 
 ## stub_tables.sql
 
@@ -32,6 +36,26 @@ Vues SQL precalculees pour les KPIs :
 - Statistiques temporelles
 - Indicateurs de performance
 
+## check_indexes.sql
+
+Script de diagnostic pour verifier l'etat des index et performances :
+- Liste des index existants
+- Comptage des lignes par table
+- Analyse de la taille des tables
+
+## optimize_performance.sql
+
+Script d'optimisation des performances :
+- Creation des index manquants (date, CROSS, type)
+- Conversion des vues en vues materialisees
+- Index composites pour les requetes courantes
+
+## refresh_materialized_views.sql
+
+Script de rafraichissement des vues materialisees :
+- A executer apres chaque chargement ETL
+- Rafraichit toutes les vues KPI de maniere concurrente
+
 ## Utilisation
 
 ```bash
@@ -40,6 +64,15 @@ psql -U postgres -d secmar -f sql/stub_tables.sql
 
 # Creer les vues KPI
 psql -U postgres -d secmar -f sql/views_kpi.sql
+
+# Optimiser les performances (production)
+psql $DATABASE_URL -f sql/optimize_performance.sql
+
+# Rafraichir les vues materialisees (apres ETL)
+psql $DATABASE_URL -f sql/refresh_materialized_views.sql
+
+# Diagnostiquer les performances
+psql $DATABASE_URL -f sql/check_indexes.sql
 ```
 
 ## Lien avec src/database/

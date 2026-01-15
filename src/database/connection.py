@@ -272,8 +272,175 @@ def drop_tables() -> None:
     Base.metadata.drop_all(engine)
     print("Tables supprimées")
 
+def refresh_materialized_views() -> bool:
+    """Rafraîchir les vues matérialisées (à appeler après ETL).
+
+    Vues rafraîchies:
+    - operations_stats: stats par opération (source pour les autres)
+    - v_kpi_global: KPIs globaux pré-calculés
+    - v_kpi_annuel: stats annuelles pré-calculées
+    - v_kpi_cross: stats par CROSS pré-calculées
+    - v_kpi_yoy_cross_actifs: Year-over-Year pour CROSS actifs
+    - v_kpi_cross_benchmark_mv: Performance benchmark CROSS (Phase 4)
+    - v_kpi_flotteurs_categorie_mv: Stats flotteurs par catégorie (Phase 4)
+    - v_kpi_alertes_anomalies_mv: Alertes et anomalies avec z-scores
+    - v_kpi_securite_mensuel_mv: Sécurité mensuelle pré-calculée
+
+    Returns:
+        True si le rafraîchissement a réussi, False sinon
+    """
+    try:
+        with get_session() as session:
+            # Vérifier si operations_stats est une vue matérialisée
+            result = session.execute(text("""
+                SELECT 1 FROM pg_matviews
+                WHERE matviewname = 'operations_stats' AND schemaname = 'clean'
+            """))
+            if not result.fetchone():
+                print("operations_stats n'est pas une vue matérialisée")
+                return False
+
+            # Rafraîchir operations_stats en premier (source pour les autres vues)
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY operations_stats"))
+            session.execute(text("ANALYZE operations_stats"))
+            print("  ✓ operations_stats rafraîchie")
+
+            # Rafraîchir les vues KPI dépendantes
+            # v_kpi_global n'a pas d'index unique, donc pas CONCURRENTLY
+            session.execute(text("REFRESH MATERIALIZED VIEW v_kpi_global"))
+            print("  ✓ v_kpi_global rafraîchie")
+
+            # v_kpi_annuel et v_kpi_cross ont des index uniques
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_annuel"))
+            print("  ✓ v_kpi_annuel rafraîchie")
+
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_cross"))
+            print("  ✓ v_kpi_cross rafraîchie")
+
+            # v_kpi_yoy_cross_actifs pour les comparatifs YoY des CROSS actifs
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_yoy_cross_actifs"))
+            print("  ✓ v_kpi_yoy_cross_actifs rafraîchie")
+
+            # v_kpi_cross_benchmark_mv pour les performances CROSS (Phase 4)
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_cross_benchmark_mv"))
+            print("  ✓ v_kpi_cross_benchmark_mv rafraîchie")
+
+            # v_kpi_flotteurs_categorie_mv pour les stats flotteurs (Phase 4)
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_flotteurs_categorie_mv"))
+            print("  ✓ v_kpi_flotteurs_categorie_mv rafraîchie")
+
+            # v_kpi_flotteurs_categorie_cross_actifs_mv pour les CROSS actifs
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_flotteurs_categorie_cross_actifs_mv"))
+            print("  ✓ v_kpi_flotteurs_categorie_cross_actifs_mv rafraîchie")
+
+            # v_kpi_flotteurs_analyse_cross_actifs_mv pour les CROSS actifs
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_flotteurs_analyse_cross_actifs_mv"))
+            print("  ✓ v_kpi_flotteurs_analyse_cross_actifs_mv rafraîchie")
+
+            # v_kpi_alertes_anomalies_mv pour les alertes et anomalies
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_alertes_anomalies_mv"))
+            print("  ✓ v_kpi_alertes_anomalies_mv rafraîchie")
+
+            # v_kpi_alertes_anomalies_cross_actifs_mv pour les CROSS actifs
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_alertes_anomalies_cross_actifs_mv"))
+            print("  ✓ v_kpi_alertes_anomalies_cross_actifs_mv rafraîchie")
+
+            # v_kpi_securite_mensuel_mv pour la sécurité mensuelle
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_securite_mensuel_mv"))
+            print("  ✓ v_kpi_securite_mensuel_mv rafraîchie")
+
+            # v_kpi_securite_mensuel_cross_actifs_mv pour les CROSS actifs
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_securite_mensuel_cross_actifs_mv"))
+            print("  ✓ v_kpi_securite_mensuel_cross_actifs_mv rafraîchie")
+
+            # Vues temporelles et météo pour les CROSS actifs
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_saisonnalite_mensuelle_cross_actifs_mv"))
+            print("  ✓ v_kpi_saisonnalite_mensuelle_cross_actifs_mv rafraîchie")
+
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_phase_journee_cross_actifs_mv"))
+            print("  ✓ v_kpi_phase_journee_cross_actifs_mv rafraîchie")
+
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_impact_vacances_cross_actifs_mv"))
+            print("  ✓ v_kpi_impact_vacances_cross_actifs_mv rafraîchie")
+
+            session.execute(text("REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_meteo_correlation_cross_actifs_mv"))
+            print("  ✓ v_kpi_meteo_correlation_cross_actifs_mv rafraîchie")
+
+        print("Vues matérialisées rafraîchies avec succès")
+        return True
+    except Exception as e:
+        print(f"Erreur lors du rafraîchissement: {e}")
+        return False
+
+
+def refresh_materialized_views_async() -> None:
+    """Rafraîchir les vues matérialisées en arrière-plan (non-bloquant).
+
+    Lance le refresh dans un thread séparé pour ne pas bloquer l'utilisateur.
+    Utile après les opérations CRUD pour mettre à jour le dashboard.
+    """
+    import threading
+
+    thread = threading.Thread(target=refresh_materialized_views, daemon=True)
+    thread.start()
+
+
+def invalidate_stats_cache() -> None:
+    """Invalide le cache Streamlit des fonctions analytics.
+
+    À appeler après les opérations CRUD pour forcer le re-fetch
+    des données sur le dashboard.
+    """
+    try:
+        import streamlit as st
+        st.cache_data.clear()
+        st.cache_resource.clear()
+    except Exception:
+        pass  # Pas en contexte Streamlit ou erreur - on ignore
+
+
+def check_materialized_view_status() -> dict:
+    """Vérifier le statut de la vue matérialisée operations_stats.
+
+    Returns:
+        Dictionnaire avec le statut et les infos de la vue
+    """
+    try:
+        with get_session() as session:
+            # Vérifier si c'est une vue matérialisée
+            result = session.execute(text("""
+                SELECT
+                    'operations_stats' as view_name,
+                    CASE
+                        WHEN EXISTS (SELECT 1 FROM pg_matviews WHERE matviewname = 'operations_stats' AND schemaname = 'clean')
+                        THEN 'MATERIALIZED'
+                        WHEN EXISTS (SELECT 1 FROM pg_views WHERE viewname = 'operations_stats' AND schemaname = 'clean')
+                        THEN 'REGULAR'
+                        ELSE 'NOT_FOUND'
+                    END as view_type
+            """))
+            row = result.fetchone()
+            view_type = row[1] if row else "NOT_FOUND"
+
+            # Compter les lignes
+            count_result = session.execute(text("SELECT COUNT(*) FROM operations_stats"))
+            row_count = count_result.scalar() or 0
+
+            return {
+                "view_type": view_type,
+                "row_count": row_count,
+                "is_optimized": view_type == "MATERIALIZED",
+            }
+    except Exception as e:
+        return {
+            "view_type": "ERROR",
+            "row_count": 0,
+            "is_optimized": False,
+            "error": str(e),
+        }
+
+
 def execute_sql_file(sql_file: str, engine: Engine):
-    
     """
     Exécute le contenu d'un fichier SQL avec SQLAlchemy.
 

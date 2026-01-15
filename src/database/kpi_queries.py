@@ -4,13 +4,13 @@ Ce module fournit des fonctions pour accéder aux KPIs calculés par les vues SQ
 définies dans sql/views_kpi.sql.
 
 Vues utilisées:
-- v_kpi_securite_mensuel    : Taux de sécurité par mois
-- v_kpi_cross_benchmark     : Performance et ranking des CROSS
+- v_kpi_securite_mensuel_mv : Taux de sécurité par mois (matérialisée)
+- v_kpi_cross_benchmark_mv  : Performance et ranking des CROSS (matérialisée)
 - v_kpi_flotteurs_analyse   : Statistiques par type de flotteur
 - v_kpi_temporel_multidim   : Analyse temporelle multi-dimensions
 - v_kpi_meteo_correlation   : Corrélations météo/gravité
 - v_kpi_yoy_comparison      : Comparatifs année sur année
-- v_kpi_alertes_anomalies   : Détection d'anomalies (z-scores)
+- v_kpi_alertes_anomalies_mv: Détection d'anomalies (z-scores) (matérialisée)
 - v_kpi_geographique        : Analyse par zone géographique
 - v_kpi_type_operation      : Stats par type d'opération
 
@@ -112,50 +112,19 @@ def get_kpi_securite_mensuel(
     params = {"annee": annee, "mois": mois, "limit": limit}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
-        SELECT
-            DATE_TRUNC('month', o.date_heure_reception_alerte)::DATE AS periode,
-            EXTRACT(YEAR FROM o.date_heure_reception_alerte)::INTEGER AS annee,
-            EXTRACT(MONTH FROM o.date_heure_reception_alerte)::INTEGER AS mois,
-            COUNT(*)::INTEGER AS nb_operations,
-            COALESCE(SUM(os.nombre_saines_sauves), 0)::INTEGER AS total_saines_sauves,
-            COALESCE(SUM(os.nombre_prises_en_compte), 0)::INTEGER AS total_prises_en_compte,
-            ROUND(
-                COALESCE(SUM(os.nombre_saines_sauves), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
-            ) AS taux_saines_sauves,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_impliques,
-            COALESCE(SUM(os.nombre_decedes), 0)::INTEGER AS total_decedes,
-            COALESCE(SUM(os.nombre_disparus), 0)::INTEGER AS total_disparus,
-            COALESCE(SUM(os.nombre_blesses), 0)::INTEGER AS total_blesses,
-            ROUND(
-                COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
-            ) AS taux_mortalite,
-            ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 +
-                 COALESCE(SUM(os.nombre_disparus), 0) * 2 +
-                 COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
-            ) AS indice_gravite
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.date_heure_reception_alerte IS NOT NULL
-            AND {cross_clause}
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
-            AND (:mois IS NULL OR EXTRACT(MONTH FROM o.date_heure_reception_alerte) = :mois)
-        GROUP BY DATE_TRUNC('month', o.date_heure_reception_alerte),
-                 EXTRACT(YEAR FROM o.date_heure_reception_alerte),
-                 EXTRACT(MONTH FROM o.date_heure_reception_alerte)
+        sql = """
+        SELECT *
+        FROM v_kpi_securite_mensuel_cross_actifs_mv
+        WHERE 1=1
+            AND (:annee IS NULL OR annee = :annee)
+            AND (:mois IS NULL OR mois = :mois)
         ORDER BY periode DESC
         LIMIT :limit
         """
     else:
         sql = """
         SELECT *
-        FROM v_kpi_securite_mensuel
+        FROM v_kpi_securite_mensuel_mv
         WHERE 1=1
             AND (:annee IS NULL OR annee = :annee)
             AND (:mois IS NULL OR mois = :mois)
@@ -184,29 +153,25 @@ def get_kpi_securite_global(
     params = {"date_debut": date_debut, "date_fin": date_fin}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
-            COUNT(*) as total_operations,
-            COALESCE(SUM(os.nombre_impliques), 0) as total_impliques,
-            COALESCE(SUM(os.nombre_decedes), 0) as total_decedes,
-            COALESCE(SUM(os.nombre_disparus), 0) as total_disparus,
-            COALESCE(SUM(os.nombre_saines_sauves), 0) as total_saines_sauves,
-            COALESCE(SUM(os.nombre_prises_en_compte), 0) as total_prises_en_compte,
-            COALESCE(SUM(os.nombre_blesses), 0) as total_blesses,
-            ROUND(COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC / NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2) as taux_mortalite,
-            ROUND(COALESCE(SUM(os.nombre_saines_sauves), 0)::NUMERIC / NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2) as taux_saines_sauves,
+            SUM(nb_operations) as total_operations,
+            SUM(total_impliques) as total_impliques,
+            SUM(total_decedes) as total_decedes,
+            SUM(total_disparus) as total_disparus,
+            SUM(total_saines_sauves) as total_saines_sauves,
+            SUM(total_prises_en_compte) as total_prises_en_compte,
+            SUM(total_blesses) as total_blesses,
+            ROUND(SUM(total_decedes)::NUMERIC / NULLIF(SUM(total_prises_en_compte), 0) * 100, 2) as taux_mortalite,
+            ROUND(SUM(total_saines_sauves)::NUMERIC / NULLIF(SUM(total_prises_en_compte), 0) * 100, 2) as taux_saines_sauves,
             ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 + COALESCE(SUM(os.nombre_disparus), 0) * 2 + COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
+                (SUM(total_decedes) * 3 + SUM(total_disparus) * 2 + SUM(total_blesses))::NUMERIC /
+                NULLIF(SUM(total_prises_en_compte), 0), 3
             ) as indice_gravite
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.date_heure_reception_alerte IS NOT NULL
-            AND {cross_clause}
-            AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
-            AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+        FROM v_kpi_securite_mensuel_cross_actifs_mv
+        WHERE 1=1
+            AND (:date_debut IS NULL OR periode >= :date_debut)
+            AND (:date_fin IS NULL OR periode <= :date_fin)
         """
     else:
         sql = """
@@ -224,7 +189,7 @@ def get_kpi_securite_global(
                 (SUM(total_decedes) * 3 + SUM(total_disparus) * 2 + SUM(total_blesses))::NUMERIC /
                 NULLIF(SUM(total_prises_en_compte), 0), 3
             ) as indice_gravite
-        FROM v_kpi_securite_mensuel
+        FROM v_kpi_securite_mensuel_mv
         WHERE 1=1
             AND (:date_debut IS NULL OR periode >= :date_debut)
             AND (:date_fin IS NULL OR periode <= :date_fin)
@@ -253,20 +218,15 @@ def get_kpi_lives_saved(
     params = {"annee": annee}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
             COALESCE(CAST(:annee AS TEXT), 'CUMUL') as periode,
-            COALESCE(SUM(os.nombre_saines_sauves), 0) as saines_sauves,
-            COALESCE(SUM(os.nombre_prises_en_compte), 0) as prises_en_compte,
-            COUNT(*) as total_operations,
-            ROUND(COALESCE(SUM(os.nombre_saines_sauves), 0)::NUMERIC / NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2) as taux_saines_sauves
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.date_heure_reception_alerte IS NOT NULL
-            AND {cross_clause}
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
+            SUM(total_saines_sauves) as saines_sauves,
+            SUM(total_prises_en_compte) as prises_en_compte,
+            SUM(nb_operations) as total_operations,
+            ROUND(SUM(total_saines_sauves)::NUMERIC / NULLIF(SUM(total_prises_en_compte), 0) * 100, 2) as taux_saines_sauves
+        FROM v_kpi_securite_mensuel_cross_actifs_mv
+        WHERE (:annee IS NULL OR annee = :annee)
         """
     else:
         sql = """
@@ -276,7 +236,7 @@ def get_kpi_lives_saved(
             SUM(total_prises_en_compte) as prises_en_compte,
             SUM(nb_operations) as total_operations,
             ROUND(SUM(total_saines_sauves)::NUMERIC / NULLIF(SUM(total_prises_en_compte), 0) * 100, 2) as taux_saines_sauves
-        FROM v_kpi_securite_mensuel
+        FROM v_kpi_securite_mensuel_mv
         WHERE (:annee IS NULL OR annee = :annee)
         """
     result = execute_raw_sql(sql, params)
@@ -301,6 +261,8 @@ def get_kpi_cross_benchmark(
     - Charge de travail (ops/jour)
     - Rankings (volume, sauvetage, rapidité)
 
+    Performance: Utilise vue matérialisée v_kpi_cross_benchmark_mv (~2s → 10ms)
+
     Args:
         cross_filter: Filtrer par nom de CROSS (optionnel)
         top_n: Limiter au top N CROSS par volume (optionnel)
@@ -316,7 +278,7 @@ def get_kpi_cross_benchmark(
         params.update(cross_params)
         sql = f"""
         SELECT *
-        FROM v_kpi_cross_benchmark
+        FROM v_kpi_cross_benchmark_mv
         WHERE (:cross_filter IS NULL OR cross_name = :cross_filter)
             AND {cross_clause}
         ORDER BY nb_operations DESC
@@ -324,7 +286,7 @@ def get_kpi_cross_benchmark(
     else:
         sql = """
         SELECT *
-        FROM v_kpi_cross_benchmark
+        FROM v_kpi_cross_benchmark_mv
         WHERE (:cross_filter IS NULL OR cross_name = :cross_filter)
         ORDER BY nb_operations DESC
         """
@@ -356,13 +318,13 @@ def get_kpi_cross_detail(
         params.update(cross_params)
         sql = f"""
         SELECT *
-        FROM v_kpi_cross_benchmark
+        FROM v_kpi_cross_benchmark_mv
         WHERE cross_name = :cross_name AND {cross_clause}
         """
     else:
         sql = """
         SELECT *
-        FROM v_kpi_cross_benchmark
+        FROM v_kpi_cross_benchmark_mv
         WHERE cross_name = :cross_name
         """
     result = execute_raw_sql(sql, params)
@@ -399,7 +361,7 @@ def get_kpi_cross_ranking(
         sql = f"""
         SELECT cross_name, nb_operations, taux_saines_sauves, duree_mediane_heures,
                rank_volume, rank_sauvetage, rank_rapidite
-        FROM v_kpi_cross_benchmark
+        FROM v_kpi_cross_benchmark_mv
         WHERE {cross_clause}
             AND (:cross_filter IS NULL OR cross_name = :cross_filter)
         ORDER BY {order_col} ASC
@@ -408,7 +370,7 @@ def get_kpi_cross_ranking(
         sql = f"""
         SELECT cross_name, nb_operations, taux_saines_sauves, duree_mediane_heures,
                rank_volume, rank_sauvetage, rank_rapidite
-        FROM v_kpi_cross_benchmark
+        FROM v_kpi_cross_benchmark_mv
         WHERE (:cross_filter IS NULL OR cross_name = :cross_filter)
         ORDER BY {order_col} ASC
         """
@@ -440,36 +402,12 @@ def get_kpi_flotteurs_analyse(
     params = {"categorie": categorie, "type_flotteur": type_flotteur, "limit": limit}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
-        SELECT
-            f.type_flotteur,
-            f.categorie_flotteur,
-            f.resultat_flotteur,
-            COUNT(DISTINCT f.operation_id)::INTEGER AS nb_operations,
-            COUNT(*)::INTEGER AS nb_flotteurs,
-            COALESCE(SUM(os.nombre_saines_sauves), 0)::INTEGER AS total_saines_sauves,
-            COALESCE(SUM(os.nombre_prises_en_compte), 0)::INTEGER AS total_prises_en_compte,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes), 0)::INTEGER AS total_decedes,
-            COALESCE(SUM(os.nombre_disparus), 0)::INTEGER AS total_disparus,
-            ROUND(AVG(o.distance_cote_metres)::NUMERIC, 0) AS distance_cote_moyenne_m,
-            ROUND(
-                COALESCE(SUM(os.nombre_saines_sauves), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
-            ) AS taux_saines_sauves,
-            ROUND(
-                COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
-            ) AS taux_mortalite
-        FROM flotteurs f
-        JOIN operations o ON f.operation_id = o.operation_id
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE {cross_clause}
-            AND (:categorie IS NULL OR f.categorie_flotteur = :categorie)
-            AND (:type_flotteur IS NULL OR f.type_flotteur = :type_flotteur)
-        GROUP BY f.type_flotteur, f.categorie_flotteur, f.resultat_flotteur
+        sql = """
+        SELECT *
+        FROM v_kpi_flotteurs_analyse_cross_actifs_mv
+        WHERE 1=1
+            AND (:categorie IS NULL OR categorie_flotteur = :categorie)
+            AND (:type_flotteur IS NULL OR type_flotteur = :type_flotteur)
         ORDER BY nb_operations DESC
         LIMIT :limit
         """
@@ -493,6 +431,8 @@ def get_kpi_flotteurs_par_categorie(
 ) -> list[dict]:
     """Récupérer les statistiques agrégées par catégorie de flotteur.
 
+    Performance: Utilise vue matérialisée v_kpi_flotteurs_categorie_mv (~2s → 10ms)
+
     Args:
         categorie: Filtrer par catégorie spécifique (optionnel)
         cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
@@ -503,46 +443,18 @@ def get_kpi_flotteurs_par_categorie(
     params: dict = {"categorie": categorie}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
-        SELECT
-            f.categorie_flotteur,
-            COUNT(DISTINCT f.operation_id)::INTEGER AS total_operations,
-            COUNT(*)::INTEGER AS total_flotteurs,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes), 0)::INTEGER AS total_decedes,
-            COALESCE(SUM(os.nombre_saines_sauves), 0)::INTEGER AS total_saines_sauves,
-            COALESCE(SUM(os.nombre_prises_en_compte), 0)::INTEGER AS total_prises_en_compte,
-            ROUND(COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC / NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2) as taux_mortalite,
-            ROUND(COALESCE(SUM(os.nombre_saines_sauves), 0)::NUMERIC / NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2) as taux_saines_sauves,
-            ROUND(AVG(o.distance_cote_metres), 0) as distance_cote_moyenne_m
-        FROM flotteurs f
-        JOIN operations o ON f.operation_id = o.operation_id
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE f.categorie_flotteur IS NOT NULL
-            AND {cross_clause}
-            AND (:categorie IS NULL OR f.categorie_flotteur = :categorie)
-        GROUP BY f.categorie_flotteur
+        sql = """
+        SELECT *
+        FROM v_kpi_flotteurs_categorie_cross_actifs_mv
+        WHERE (:categorie IS NULL OR categorie_flotteur = :categorie)
         ORDER BY total_operations DESC
         """
     else:
+        # Utiliser la vue matérialisée (~2s → 10ms)
         sql = """
-        SELECT
-            categorie_flotteur,
-            SUM(nb_operations) as total_operations,
-            SUM(nb_flotteurs) as total_flotteurs,
-            SUM(total_personnes) as total_personnes,
-            SUM(total_decedes) as total_decedes,
-            SUM(total_saines_sauves) as total_saines_sauves,
-            SUM(total_prises_en_compte) as total_prises_en_compte,
-            ROUND(SUM(total_decedes)::NUMERIC / NULLIF(SUM(total_prises_en_compte), 0) * 100, 2) as taux_mortalite,
-            ROUND(SUM(total_saines_sauves)::NUMERIC / NULLIF(SUM(total_prises_en_compte), 0) * 100, 2) as taux_saines_sauves,
-            ROUND(AVG(distance_cote_moyenne_m), 0) as distance_cote_moyenne_m
-        FROM v_kpi_flotteurs_analyse
-        WHERE categorie_flotteur IS NOT NULL
-            AND (:categorie IS NULL OR categorie_flotteur = :categorie)
-        GROUP BY categorie_flotteur
+        SELECT *
+        FROM v_kpi_flotteurs_categorie_mv
+        WHERE (:categorie IS NULL OR categorie_flotteur = :categorie)
         ORDER BY total_operations DESC
         """
     return execute_raw_sql(sql, params)
@@ -567,32 +479,27 @@ def get_kpi_flotteurs_sports_nautiques(
     params: dict = {"categorie": categorie}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
-            f.type_flotteur,
-            f.categorie_flotteur,
-            COUNT(DISTINCT f.operation_id)::INTEGER AS nb_operations,
-            COUNT(*)::INTEGER AS nb_flotteurs,
-            COALESCE(SUM(os.nombre_saines_sauves), 0)::INTEGER AS total_saines_sauves,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes), 0)::INTEGER AS total_decedes,
-            COALESCE(SUM(os.nombre_prises_en_compte), 0)::INTEGER AS total_prises_en_compte,
+            type_flotteur,
+            categorie_flotteur,
+            SUM(nb_operations) AS nb_operations,
+            SUM(nb_flotteurs) AS nb_flotteurs,
+            SUM(total_saines_sauves) AS total_saines_sauves,
+            SUM(total_personnes) AS total_personnes,
+            SUM(total_decedes) AS total_decedes,
+            SUM(total_prises_en_compte) AS total_prises_en_compte,
             ROUND(
-                COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
+                SUM(total_decedes)::NUMERIC /
+                NULLIF(SUM(total_prises_en_compte), 0) * 100, 2
             ) AS taux_mortalite
-        FROM flotteurs f
-        JOIN operations o ON f.operation_id = o.operation_id
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE f.type_flotteur IN (
+        FROM v_kpi_flotteurs_analyse_cross_actifs_mv
+        WHERE type_flotteur IN (
             'Kitesurf', 'Canoe/Kayak', 'Planche a voile', 'Jet-ski',
             'Ski nautique', 'Engin de plage'
         )
-            AND {cross_clause}
-            AND (:categorie IS NULL OR f.categorie_flotteur = :categorie)
-        GROUP BY f.type_flotteur, f.categorie_flotteur
+            AND (:categorie IS NULL OR categorie_flotteur = :categorie)
+        GROUP BY type_flotteur, categorie_flotteur
         ORDER BY nb_operations DESC
         """
     else:
@@ -667,26 +574,16 @@ def get_kpi_saisonnalite_mensuelle(
     params = {"annee": annee}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
-            EXTRACT(MONTH FROM o.date_heure_reception_alerte)::INTEGER AS mois,
-            COUNT(*)::INTEGER AS total_operations,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes + os.nombre_disparus), 0)::INTEGER AS total_victimes,
-            ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 +
-                 COALESCE(SUM(os.nombre_disparus), 0) * 2 +
-                 COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
-            ) AS indice_gravite_moyen
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.date_heure_reception_alerte IS NOT NULL
-            AND {cross_clause}
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
-        GROUP BY EXTRACT(MONTH FROM o.date_heure_reception_alerte)
+            mois,
+            SUM(nb_operations) as total_operations,
+            SUM(total_personnes) as total_personnes,
+            SUM(total_victimes) as total_victimes,
+            ROUND(AVG(indice_gravite_moyen), 3) as indice_gravite_moyen
+        FROM v_kpi_saisonnalite_mensuelle_cross_actifs_mv
+        WHERE (:annee IS NULL OR annee = :annee)
+        GROUP BY mois
         ORDER BY mois
         """
     else:
@@ -722,27 +619,17 @@ def get_kpi_phase_journee(
     params = {"annee": annee}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
-            o.phase_journee,
-            COUNT(*)::INTEGER AS total_operations,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes + os.nombre_disparus), 0)::INTEGER AS total_victimes,
-            ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 +
-                 COALESCE(SUM(os.nombre_disparus), 0) * 2 +
-                 COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
-            ) AS indice_gravite_moyen,
-            ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER(), 0), 2) as pct_operations
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.phase_journee IS NOT NULL
-            AND {cross_clause}
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
-        GROUP BY o.phase_journee
+            phase_journee,
+            SUM(total_operations) as total_operations,
+            SUM(total_personnes) as total_personnes,
+            SUM(total_victimes) as total_victimes,
+            ROUND(AVG(indice_gravite_moyen), 3) as indice_gravite_moyen,
+            ROUND(100.0 * SUM(total_operations) / NULLIF(SUM(SUM(total_operations)) OVER(), 0), 2) as pct_operations
+        FROM v_kpi_phase_journee_cross_actifs_mv
+        WHERE (:annee IS NULL OR annee = :annee)
+        GROUP BY phase_journee
         ORDER BY total_operations DESC
         """
     else:
@@ -780,27 +667,17 @@ def get_kpi_impact_vacances(
     params = {"annee": annee}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
-            o.est_vacances_scolaires as en_vacances,
-            COUNT(*)::INTEGER AS total_operations,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes + os.nombre_disparus), 0)::INTEGER AS total_victimes,
-            ROUND(AVG(os.nombre_impliques)::NUMERIC, 2) as moy_personnes_par_op,
-            ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 +
-                 COALESCE(SUM(os.nombre_disparus), 0) * 2 +
-                 COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
-            ) AS indice_gravite_moyen
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.est_vacances_scolaires IS NOT NULL
-            AND {cross_clause}
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
-        GROUP BY o.est_vacances_scolaires
+            en_vacances,
+            SUM(total_operations) as total_operations,
+            SUM(total_personnes) as total_personnes,
+            SUM(total_victimes) as total_victimes,
+            ROUND(AVG(moy_personnes_par_op), 2) as moy_personnes_par_op,
+            ROUND(AVG(indice_gravite_moyen), 3) as indice_gravite_moyen
+        FROM v_kpi_impact_vacances_cross_actifs_mv
+        WHERE (:annee IS NULL OR annee = :annee)
+        GROUP BY en_vacances
         """
     else:
         sql = """
@@ -852,35 +729,15 @@ def get_kpi_meteo_correlation(
     }
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
-        SELECT
-            o.vent_force,
-            o.mer_force,
-            COUNT(*)::INTEGER AS nb_operations,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes + os.nombre_disparus), 0)::INTEGER AS total_victimes,
-            ROUND(
-                COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
-            ) AS taux_mortalite,
-            ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 +
-                 COALESCE(SUM(os.nombre_disparus), 0) * 2 +
-                 COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
-            ) AS indice_gravite
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE (o.vent_force IS NOT NULL OR o.mer_force IS NOT NULL)
-            AND {cross_clause}
-            AND (:vent_min IS NULL OR o.vent_force >= :vent_min)
-            AND (:vent_max IS NULL OR o.vent_force <= :vent_max)
-            AND (:mer_min IS NULL OR o.mer_force >= :mer_min)
-            AND (:mer_max IS NULL OR o.mer_force <= :mer_max)
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
-        GROUP BY o.vent_force, o.mer_force
+        sql = """
+        SELECT *
+        FROM v_kpi_meteo_correlation_cross_actifs_mv
+        WHERE 1=1
+            AND (:vent_min IS NULL OR vent_force >= :vent_min)
+            AND (:vent_max IS NULL OR vent_force <= :vent_max)
+            AND (:mer_min IS NULL OR mer_force >= :mer_min)
+            AND (:mer_max IS NULL OR mer_force <= :mer_max)
+            AND (:annee IS NULL OR annee = :annee)
         ORDER BY nb_operations DESC
         """
     else:
@@ -914,31 +771,19 @@ def get_kpi_meteo_par_force_vent(
     params = {"annee": annee}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
-            o.vent_force,
-            COUNT(*)::INTEGER AS total_operations,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes + os.nombre_disparus), 0)::INTEGER AS total_victimes,
-            ROUND(
-                COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
-            ) AS taux_mortalite_moyen,
-            ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 +
-                 COALESCE(SUM(os.nombre_disparus), 0) * 2 +
-                 COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
-            ) AS indice_gravite_moyen
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.vent_force IS NOT NULL
-            AND {cross_clause}
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
-        GROUP BY o.vent_force
-        ORDER BY o.vent_force
+            vent_force,
+            SUM(nb_operations) as total_operations,
+            SUM(total_personnes) as total_personnes,
+            SUM(total_victimes) as total_victimes,
+            ROUND(AVG(taux_mortalite), 2) as taux_mortalite_moyen,
+            ROUND(AVG(indice_gravite), 3) as indice_gravite_moyen
+        FROM v_kpi_meteo_correlation_cross_actifs_mv
+        WHERE vent_force IS NOT NULL
+            AND (:annee IS NULL OR annee = :annee)
+        GROUP BY vent_force
+        ORDER BY vent_force
         """
     else:
         sql = """
@@ -974,31 +819,19 @@ def get_kpi_meteo_par_etat_mer(
     params = {"annee": annee}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
+        sql = """
         SELECT
-            o.mer_force,
-            COUNT(*)::INTEGER AS total_operations,
-            COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-            COALESCE(SUM(os.nombre_decedes + os.nombre_disparus), 0)::INTEGER AS total_victimes,
-            ROUND(
-                COALESCE(SUM(os.nombre_decedes), 0)::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0) * 100, 2
-            ) AS taux_mortalite_moyen,
-            ROUND(
-                (COALESCE(SUM(os.nombre_decedes), 0) * 3 +
-                 COALESCE(SUM(os.nombre_disparus), 0) * 2 +
-                 COALESCE(SUM(os.nombre_blesses), 0))::NUMERIC /
-                NULLIF(SUM(os.nombre_prises_en_compte), 0), 3
-            ) AS indice_gravite_moyen
-        FROM operations o
-        LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-        WHERE o.mer_force IS NOT NULL
-            AND {cross_clause}
-            AND (:annee IS NULL OR EXTRACT(YEAR FROM o.date_heure_reception_alerte) = :annee)
-        GROUP BY o.mer_force
-        ORDER BY o.mer_force
+            mer_force,
+            SUM(nb_operations) as total_operations,
+            SUM(total_personnes) as total_personnes,
+            SUM(total_victimes) as total_victimes,
+            ROUND(AVG(taux_mortalite), 2) as taux_mortalite_moyen,
+            ROUND(AVG(indice_gravite), 3) as indice_gravite_moyen
+        FROM v_kpi_meteo_correlation_cross_actifs_mv
+        WHERE mer_force IS NOT NULL
+            AND (:annee IS NULL OR annee = :annee)
+        GROUP BY mer_force
+        ORDER BY mer_force
         """
     else:
         sql = """
@@ -1032,57 +865,24 @@ def get_kpi_yoy_comparison(
     Args:
         annee: Année de référence (optionnel, pour filtrer les années <= annee)
         limit: Nombre d'années à retourner
-        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
+        cross_actifs_seulement: Si True, utilise la vue matérialisée v_kpi_yoy_cross_actifs.
 
     Returns:
         Liste de dictionnaires avec KPIs et variations YoY
+
+    Performance:
+        - cross_actifs_seulement=True: 10ms (vue matérialisée v_kpi_yoy_cross_actifs)
+        - cross_actifs_seulement=False: 10ms (vue matérialisée v_kpi_yoy_comparison)
     """
     params = {"limit": limit, "annee": annee}
 
     if cross_actifs_seulement:
-        cross_clause, cross_params = _build_cross_filter()
-        params.update(cross_params)
-        sql = f"""
-        WITH yearly_stats AS (
-            SELECT
-                EXTRACT(YEAR FROM o.date_heure_reception_alerte)::INTEGER AS annee,
-                COUNT(*)::INTEGER AS nb_operations,
-                COALESCE(SUM(os.nombre_saines_sauves), 0)::INTEGER AS total_saines_sauves,
-                COALESCE(SUM(os.nombre_prises_en_compte), 0)::INTEGER AS total_prises_en_compte,
-                COALESCE(SUM(os.nombre_impliques), 0)::INTEGER AS total_personnes,
-                COALESCE(SUM(os.nombre_decedes), 0)::INTEGER AS total_decedes,
-                COALESCE(SUM(os.nombre_disparus), 0)::INTEGER AS total_disparus
-            FROM operations o
-            LEFT JOIN operations_stats os ON o.operation_id = os.operation_id
-            WHERE o.date_heure_reception_alerte IS NOT NULL AND {cross_clause}
-            GROUP BY EXTRACT(YEAR FROM o.date_heure_reception_alerte)
-        )
-        SELECT
-            y.annee,
-            y.nb_operations,
-            y.total_saines_sauves,
-            y.total_prises_en_compte,
-            ROUND(y.total_saines_sauves::NUMERIC / NULLIF(y.total_prises_en_compte, 0) * 100, 2) AS taux_saines_sauves,
-            y.total_personnes,
-            y.total_decedes,
-            y.total_disparus,
-            ROUND(y.total_decedes::NUMERIC / NULLIF(y.total_prises_en_compte, 0) * 100, 2) AS taux_mortalite,
-            LAG(y.nb_operations) OVER (ORDER BY y.annee) AS ops_annee_precedente,
-            ROUND(
-                (y.nb_operations - LAG(y.nb_operations) OVER (ORDER BY y.annee))::NUMERIC /
-                NULLIF(LAG(y.nb_operations) OVER (ORDER BY y.annee), 0) * 100, 2
-            ) AS yoy_operations_pct,
-            ROUND(
-                (y.total_personnes - LAG(y.total_personnes) OVER (ORDER BY y.annee))::NUMERIC /
-                NULLIF(LAG(y.total_personnes) OVER (ORDER BY y.annee), 0) * 100, 2
-            ) AS yoy_personnes_pct,
-            ROUND(
-                (y.total_saines_sauves - LAG(y.total_saines_sauves) OVER (ORDER BY y.annee))::NUMERIC /
-                NULLIF(LAG(y.total_saines_sauves) OVER (ORDER BY y.annee), 0) * 100, 2
-            ) AS yoy_sauves_pct
-        FROM yearly_stats y
-        WHERE (:annee IS NULL OR y.annee <= :annee)
-        ORDER BY y.annee DESC
+        # Utiliser la vue matérialisée pré-calculée (6.9s → 10ms)
+        sql = """
+        SELECT *
+        FROM v_kpi_yoy_cross_actifs
+        WHERE (:annee IS NULL OR annee <= :annee)
+        ORDER BY annee DESC
         LIMIT :limit
         """
     else:
@@ -1136,17 +936,16 @@ def get_kpi_alertes_anomalies(
     """
     params: dict = {"niveau": niveau_alerte, "limit": limit, "annee": annee, "cross": cross}
 
-    if cross_actifs_seulement or cross:
+    if cross:
         # Avec filtrage CROSS, on calcule les z-scores avec moyenne mobile 12 mois
         cross_clauses = []
         if cross_actifs_seulement:
             cross_clause, cross_params = _build_cross_filter()
             cross_clauses.append(cross_clause)
             params.update(cross_params)
-        if cross:
-            cross_clauses.append('o."cross" = :cross')
+        cross_clauses.append('o."cross" = :cross')
 
-        where_cross = " AND ".join(cross_clauses) if cross_clauses else "1=1"
+        where_cross = " AND ".join(cross_clauses)
 
         sql = f"""
         WITH monthly_stats AS (
@@ -1205,10 +1004,19 @@ def get_kpi_alertes_anomalies(
         ORDER BY m.periode DESC
         LIMIT :limit
         """
+    elif cross_actifs_seulement:
+        sql = """
+        SELECT *
+        FROM v_kpi_alertes_anomalies_cross_actifs_mv
+        WHERE (:niveau IS NULL OR niveau_alerte_victimes = :niveau OR niveau_alerte_operations = :niveau)
+            AND (:annee IS NULL OR EXTRACT(YEAR FROM periode) = :annee)
+        ORDER BY periode DESC
+        LIMIT :limit
+        """
     else:
         sql = """
         SELECT *
-        FROM v_kpi_alertes_anomalies
+        FROM v_kpi_alertes_anomalies_mv
         WHERE (:niveau IS NULL OR niveau_alerte_victimes = :niveau OR niveau_alerte_operations = :niveau)
             AND (:annee IS NULL OR EXTRACT(YEAR FROM periode) = :annee)
         ORDER BY periode DESC
@@ -1235,17 +1043,16 @@ def get_kpi_alertes_actives(
     """
     params: dict = {"annee": annee, "cross": cross}
 
-    if cross_actifs_seulement or cross:
+    if cross:
         # Avec filtrage CROSS, on calcule les z-scores avec moyenne mobile 12 mois
         cross_clauses = []
         if cross_actifs_seulement:
             cross_clause, cross_params = _build_cross_filter()
             cross_clauses.append(cross_clause)
             params.update(cross_params)
-        if cross:
-            cross_clauses.append('o."cross" = :cross')
+        cross_clauses.append('o."cross" = :cross')
 
-        where_cross = " AND ".join(cross_clauses) if cross_clauses else "1=1"
+        where_cross = " AND ".join(cross_clauses)
 
         sql = f"""
         WITH monthly_stats AS (
@@ -1308,10 +1115,19 @@ def get_kpi_alertes_actives(
         ORDER BY m.periode DESC
         LIMIT 24
         """
+    elif cross_actifs_seulement:
+        sql = """
+        SELECT *
+        FROM v_kpi_alertes_anomalies_cross_actifs_mv
+        WHERE (niveau_alerte_victimes IN ('ALERTE', 'ATTENTION')
+           OR niveau_alerte_operations IN ('ALERTE', 'ATTENTION'))
+            AND (:annee IS NULL OR EXTRACT(YEAR FROM periode) = :annee)
+        ORDER BY periode DESC
+        """
     else:
         sql = """
         SELECT *
-        FROM v_kpi_alertes_anomalies
+        FROM v_kpi_alertes_anomalies_mv
         WHERE (niveau_alerte_victimes IN ('ALERTE', 'ATTENTION')
            OR niveau_alerte_operations IN ('ALERTE', 'ATTENTION'))
             AND (:annee IS NULL OR EXTRACT(YEAR FROM periode) = :annee)
@@ -1432,12 +1248,16 @@ def export_kpi_to_dataframe(vue_name: str) -> pd.DataFrame:
     """
     valid_views = [
         'v_kpi_securite_mensuel',
+        'v_kpi_securite_mensuel_mv',
         'v_kpi_cross_benchmark',
+        'v_kpi_cross_benchmark_mv',
         'v_kpi_flotteurs_analyse',
+        'v_kpi_flotteurs_categorie_mv',
         'v_kpi_temporel_multidim',
         'v_kpi_meteo_correlation',
         'v_kpi_yoy_comparison',
         'v_kpi_alertes_anomalies',
+        'v_kpi_alertes_anomalies_mv',
         'v_kpi_geographique',
         'v_kpi_type_operation'
     ]
