@@ -13,7 +13,7 @@ SET search_path TO clean;
 
 -- Table des opérations (enrichie avec champs MCD + SECMAR complet)
 CREATE TABLE IF NOT EXISTS operations (
-    operation_id INTEGER PRIMARY KEY,
+    operation_id BIGINT PRIMARY KEY,
     -- Identification
     type_operation VARCHAR(100),
     numero_sitrep VARCHAR(50),
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS operations (
     categorie_qui_alerte VARCHAR(100),
     -- Localisation
     "cross" VARCHAR(50),
-    departement VARCHAR(3),
+    departement VARCHAR(100),
     est_metropolitain BOOLEAN,
     zone_responsabilite VARCHAR(50),
     latitude DECIMAL(10, 6),
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS operations (
 -- Table des flotteurs (avec numero_ordre MCD)
 CREATE TABLE IF NOT EXISTS flotteurs (
     flotteur_id SERIAL PRIMARY KEY,
-    operation_id INTEGER NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
+    operation_id BIGINT NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
     numero_ordre INTEGER,
     type_flotteur VARCHAR(100),
     categorie_flotteur VARCHAR(100),
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS flotteurs (
 -- Table des résultats humains (avec dont_nombre_blesse MCD)
 CREATE TABLE IF NOT EXISTS resultats_humain (
     resultat_id SERIAL PRIMARY KEY,
-    operation_id INTEGER NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
+    operation_id BIGINT NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
     categorie_personne VARCHAR(50),
     resultat_humain VARCHAR(50),
     nombre INTEGER DEFAULT 0,
@@ -111,15 +111,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
     id SERIAL PRIMARY KEY,
     table_name VARCHAR(50) NOT NULL,
     operation_type VARCHAR(10) NOT NULL CHECK (operation_type IN ('INSERT', 'UPDATE', 'DELETE')),
-    record_id INTEGER,
+    record_id BIGINT,
     old_values JSONB,
     new_values JSONB,
     changed_fields TEXT[],
     user_id VARCHAR(50) DEFAULT 'system',
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
-
 
 -- =============================================================================
 -- Index pour les performances
@@ -130,66 +128,66 @@ CREATE INDEX IF NOT EXISTS idx_operations_type ON operations(type_operation);
 CREATE INDEX IF NOT EXISTS idx_operations_prefecture ON operations(prefecture_maritime);
 CREATE INDEX IF NOT EXISTS idx_flotteurs_operation ON flotteurs(operation_id);
 CREATE INDEX IF NOT EXISTS idx_resultats_operation ON resultats_humain(operation_id);
-CREATE INDEX IF NOT EXISTS idx_audit_table ON audit_log(table_name);
-CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
+-- CREATE INDEX IF NOT EXISTS idx_audit_table ON audit_log(table_name);
+-- CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
 
--- =============================================================================
--- Trigger d'audit (sans operations_stats qui est une VIEW)
--- =============================================================================
-CREATE OR REPLACE FUNCTION audit_trigger_func()
-RETURNS TRIGGER AS $$
-DECLARE
-    record_pk INTEGER;
-    old_json JSONB;
-    new_json JSONB;
-BEGIN
-    CASE TG_TABLE_NAME
-        WHEN 'operations' THEN
-            record_pk := COALESCE(NEW.operation_id, OLD.operation_id);
-        WHEN 'flotteurs' THEN
-            record_pk := COALESCE(NEW.flotteur_id, OLD.flotteur_id);
-        WHEN 'resultats_humain' THEN
-            record_pk := COALESCE(NEW.resultat_id, OLD.resultat_id);
-        ELSE
-            record_pk := NULL;
-    END CASE;
+-- -- =============================================================================
+-- -- Trigger d'audit (sans operations_stats qui est une VIEW)
+-- -- =============================================================================
+-- CREATE OR REPLACE FUNCTION audit_trigger_func()
+-- RETURNS TRIGGER AS $$
+-- DECLARE
+--     record_pk INTEGER;
+--     old_json JSONB;
+--     new_json JSONB;
+-- BEGIN
+--     CASE TG_TABLE_NAME
+--         WHEN 'operations' THEN
+--             record_pk := COALESCE(NEW.operation_id, OLD.operation_id);
+--         WHEN 'flotteurs' THEN
+--             record_pk := COALESCE(NEW.flotteur_id, OLD.flotteur_id);
+--         WHEN 'resultats_humain' THEN
+--             record_pk := COALESCE(NEW.resultat_id, OLD.resultat_id);
+--         ELSE
+--             record_pk := NULL;
+--     END CASE;
 
-    IF TG_OP = 'INSERT' THEN
-        new_json := to_jsonb(NEW);
-        INSERT INTO audit_log (table_name, operation_type, record_id, new_values, user_id)
-        VALUES (TG_TABLE_NAME, 'INSERT', record_pk, new_json,
-                COALESCE(current_setting('app.current_user', true), 'system'));
-    ELSIF TG_OP = 'UPDATE' THEN
-        old_json := to_jsonb(OLD);
-        new_json := to_jsonb(NEW);
-        INSERT INTO audit_log (table_name, operation_type, record_id, old_values, new_values, user_id)
-        VALUES (TG_TABLE_NAME, 'UPDATE', record_pk, old_json, new_json,
-                COALESCE(current_setting('app.current_user', true), 'system'));
-    ELSIF TG_OP = 'DELETE' THEN
-        old_json := to_jsonb(OLD);
-        INSERT INTO audit_log (table_name, operation_type, record_id, old_values, user_id)
-        VALUES (TG_TABLE_NAME, 'DELETE', record_pk, old_json,
-                COALESCE(current_setting('app.current_user', true), 'system'));
-    END IF;
+--     IF TG_OP = 'INSERT' THEN
+--         new_json := to_jsonb(NEW);
+--         INSERT INTO audit_log (table_name, operation_type, record_id, new_values, user_id)
+--         VALUES (TG_TABLE_NAME, 'INSERT', record_pk, new_json,
+--                 COALESCE(current_setting('app.current_user', true), 'system'));
+--     ELSIF TG_OP = 'UPDATE' THEN
+--         old_json := to_jsonb(OLD);
+--         new_json := to_jsonb(NEW);
+--         INSERT INTO audit_log (table_name, operation_type, record_id, old_values, new_values, user_id)
+--         VALUES (TG_TABLE_NAME, 'UPDATE', record_pk, old_json, new_json,
+--                 COALESCE(current_setting('app.current_user', true), 'system'));
+--     ELSIF TG_OP = 'DELETE' THEN
+--         old_json := to_jsonb(OLD);
+--         INSERT INTO audit_log (table_name, operation_type, record_id, old_values, user_id)
+--         VALUES (TG_TABLE_NAME, 'DELETE', record_pk, old_json,
+--                 COALESCE(current_setting('app.current_user', true), 'system'));
+--     END IF;
 
-    RETURN COALESCE(NEW, OLD);
-END;
-$$ LANGUAGE plpgsql;
+--     RETURN COALESCE(NEW, OLD);
+-- END;
+-- $$ LANGUAGE plpgsql;
 
--- Créer les triggers (pas sur operations_stats car c'est une VIEW)
-DROP TRIGGER IF EXISTS audit_operations ON operations;
-CREATE TRIGGER audit_operations
-    AFTER INSERT OR UPDATE OR DELETE ON operations
-    FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+-- -- Créer les triggers (pas sur operations_stats car c'est une VIEW)
+-- DROP TRIGGER IF EXISTS audit_operations ON operations;
+-- CREATE TRIGGER audit_operations
+--     AFTER INSERT OR UPDATE OR DELETE ON operations
+--     FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
-DROP TRIGGER IF EXISTS audit_flotteurs ON flotteurs;
-CREATE TRIGGER audit_flotteurs
-    AFTER INSERT OR UPDATE OR DELETE ON flotteurs
-    FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+-- DROP TRIGGER IF EXISTS audit_flotteurs ON flotteurs;
+-- CREATE TRIGGER audit_flotteurs
+--     AFTER INSERT OR UPDATE OR DELETE ON flotteurs
+--     FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
-DROP TRIGGER IF EXISTS audit_resultats_humain ON resultats_humain;
-CREATE TRIGGER audit_resultats_humain
-    AFTER INSERT OR UPDATE OR DELETE ON resultats_humain
-    FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+-- DROP TRIGGER IF EXISTS audit_resultats_humain ON resultats_humain;
+-- CREATE TRIGGER audit_resultats_humain
+--     AFTER INSERT OR UPDATE OR DELETE ON resultats_humain
+--     FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 

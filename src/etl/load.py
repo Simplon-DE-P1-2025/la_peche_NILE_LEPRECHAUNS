@@ -21,7 +21,7 @@ def load_df_to_db(
                 schema=schema,
                 if_exists=if_exists,
                 index=False,
-                method="multi",
+                # method="multi",
             )
 
         print(f"✅ Données chargées dans la table {table_name}")

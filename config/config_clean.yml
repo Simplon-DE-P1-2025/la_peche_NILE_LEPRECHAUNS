@@ -70,9 +70,9 @@ DATA_VALIDATION:
       type: int
       unique: true
       nullable: false
-    date:
-      type: datetime
-      nullable: false
+    # date:
+    #   type: datetime
+    #   nullable: false
     # annee:
     #   type: int
     #   nullable: false
@@ -143,9 +143,9 @@ DATA_VALIDATION:
     implique_wingfoil:
       type: bool
       nullable: false
-    avec_clandestins:
-      type: bool
-      nullable: false
+    # avec_clandestins:
+    #   type: bool
+    #   nullable: false
     distance_cote_metres:
       type: float
       nullable: true

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from sqlalchemy.exc import SQLAlchemyError
 
 from etl.extract import load_config, extract_url
 from etl.load import load_df_to_db
@@ -131,26 +132,60 @@ def pipeline_db_cleaned() -> None:
         on="operation_id",
         how="left"
     )
-    
+
+    # Supprimer les deux DataFrames inutiles
+    dfs_validated.pop("operations", None)
+    dfs_validated.pop("operations_stats", None)
+
+    # Ajouter le DataFrame fusionné
+    dfs_validated["operations"] = df_operations
+
+    # # renommer la colonne cross en "cross"
+    # dfs_validated["operations"].rename(
+    #     columns={"cross": '"cross"'},
+    #     inplace=True
+    #     )
+
     print(dfs_validated.keys())
     
-    # engine = create_postgres_engine(
-    #     host=os.getenv("DB_HOST"),
-    #     database=os.getenv("DB_DATABASE"),
-    #     user=os.getenv("DB_USER"),
-    #     password=os.getenv("DB_PASSWORD")
-    # )
+    engine = create_postgres_engine(
+        host=os.getenv("DB_HOST"),
+        database=os.getenv("DB_DATABASE"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD")
+    )
+    # Creation des tables dans la base de donnée
+    execute_sql_file("sql/clean_tables.sql", engine)
 
-    # execute_sql_file("sql/clean_tables.sql", engine)
-
-    # #Chargement des données validées dans le schéma CLEANED
-    # for schema_name, df in dfs_validated.items():
-    #     load_df_to_db(
-    #         df=df,
-    #         table_name=schema_name,
-    #         engine=engine,
-    #         if_exists="append",
-    #         schema="clean"  # à supprimer si non nécessaire
-    # )
+    #réorganiser l'ordre de chargement
+    order = [
+        "operations",
+        "flotteurs",
+        "resultats_humain"
+    ]
+    dfs_validated = {
+        key: dfs_validated[key]
+        for key in order
+        if key in dfs_validated
+    }
+    print(dfs_validated.keys())
+    
+    
+    
+    
+    for schema_name, df in dfs_validated.items():
+        try:
+            load_df_to_db(
+                df=df,
+                table_name=schema_name,
+                engine=engine,
+                if_exists="append",
+                schema="clean"  # à supprimer si non nécessaire
+        )
+        except SQLAlchemyError as e:
+            print(f"Erreur SQL sur la table clean.{schema_name}")
+            print(f"   Détails : {e}")
+            # on continue avec les autres tables
+            continue
 
     pass
