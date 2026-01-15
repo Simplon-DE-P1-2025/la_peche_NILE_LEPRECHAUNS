@@ -17,6 +17,7 @@ Usage:
 from datetime import date
 from typing import Optional
 import pandas as pd
+import streamlit as st
 
 from src.database.connection import execute_raw_sql
 
@@ -55,6 +56,7 @@ def _build_cross_filter() -> tuple[str, dict]:
     return f'o."cross" IN ({placeholders})', params
 
 
+@st.cache_data(ttl=3600)
 def get_kpis(cross_actifs_seulement: bool = False) -> dict:
     """Récupérer les KPIs principaux du dashboard.
 
@@ -97,6 +99,7 @@ def get_kpis(cross_actifs_seulement: bool = False) -> dict:
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
 def get_nb_cross(actifs_seulement: bool = True) -> int:
     """Compte le nombre de CROSS présents dans les données.
 
@@ -128,6 +131,7 @@ def get_nb_cross(actifs_seulement: bool = True) -> int:
     return result[0]["nb_cross"] if result else 0
 
 
+@st.cache_data(ttl=3600)
 def get_kpis_by_period(
     date_debut: Optional[date] = None,
     date_fin: Optional[date] = None,
@@ -181,6 +185,7 @@ def get_kpis_by_period(
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_operations_by_cross(cross_actifs_seulement: bool = False) -> list[dict]:
     """Nombre d'opérations par CROSS.
 
@@ -218,6 +223,7 @@ def get_operations_by_cross(cross_actifs_seulement: bool = False) -> list[dict]:
         return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_operations_by_type(cross_actifs_seulement: bool = False) -> list[dict]:
     """Répartition par type d'opération.
 
@@ -253,6 +259,7 @@ def get_operations_by_type(cross_actifs_seulement: bool = False) -> list[dict]:
         return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_operations_by_department(limit: int = 20) -> list[dict]:
     """Opérations par département.
 
@@ -277,6 +284,7 @@ def get_operations_by_department(limit: int = 20) -> list[dict]:
     return execute_raw_sql(sql, {"limit": limit})
 
 
+@st.cache_data(ttl=3600)
 def get_cross_list() -> list[str]:
     """Récupérer la liste des CROSS distincts.
 
@@ -293,6 +301,7 @@ def get_cross_list() -> list[str]:
     return [r["cross"] for r in results]
 
 
+@st.cache_data(ttl=3600)
 def get_type_list() -> list[str]:
     """Récupérer la liste des types d'opération distincts.
 
@@ -314,6 +323,7 @@ def get_type_list() -> list[str]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_operations_timeline(
     granularity: str = "month",
     date_debut: Optional[date] = None,
@@ -371,6 +381,7 @@ def get_operations_timeline(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_monthly_comparison() -> list[dict]:
     """Comparaison mois par mois sur plusieurs années.
 
@@ -390,6 +401,7 @@ def get_monthly_comparison() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_yearly_stats(cross_actifs_seulement: bool = False) -> list[dict]:
     """Statistiques annuelles.
 
@@ -434,6 +446,7 @@ def get_yearly_stats(cross_actifs_seulement: bool = False) -> list[dict]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_humain_global() -> dict:
     """Bilan humain global.
 
@@ -457,6 +470,7 @@ def get_bilan_humain_global() -> dict:
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_by_cross() -> list[dict]:
     """Bilan humain par CROSS.
 
@@ -478,6 +492,7 @@ def get_bilan_by_cross() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_by_cross_filtered(
     date_debut: Optional[date] = None,
     date_fin: Optional[date] = None,
@@ -533,6 +548,7 @@ def get_bilan_by_cross_filtered(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_by_period(
     date_debut: Optional[date] = None,
     date_fin: Optional[date] = None,
@@ -578,6 +594,7 @@ def get_bilan_by_period(
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
 def get_resultats_humain_stats() -> list[dict]:
     """Statistiques détaillées des résultats humains.
 
@@ -601,6 +618,7 @@ def get_resultats_humain_stats() -> list[dict]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_flotteurs_stats(limit: int = 15) -> list[dict]:
     """Statistiques sur les types de flotteurs.
 
@@ -623,6 +641,7 @@ def get_flotteurs_stats(limit: int = 15) -> list[dict]:
     return execute_raw_sql(sql, {"limit": limit})
 
 
+@st.cache_data(ttl=3600)
 def get_flotteurs_by_pavillon(limit: int = 10) -> list[dict]:
     """Répartition des flotteurs par pavillon.
 
@@ -650,6 +669,7 @@ def get_flotteurs_by_pavillon(limit: int = 10) -> list[dict]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_top_operations_by_personnes(limit: int = 10) -> list[dict]:
     """Top des opérations avec le plus de personnes impliquées.
 
@@ -678,6 +698,7 @@ def get_top_operations_by_personnes(limit: int = 10) -> list[dict]:
     return execute_raw_sql(sql, {"limit": limit})
 
 
+@st.cache_data(ttl=3600)
 def get_operations_with_casualties() -> list[dict]:
     """Opérations avec victimes (décédés ou disparus).
 
@@ -703,6 +724,7 @@ def get_operations_with_casualties() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def search_operations_advanced(
     cross: str = None,
     type_operation: str = None,
@@ -777,6 +799,7 @@ def search_operations_advanced(
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def query_to_dataframe(sql: str, params: dict = None) -> pd.DataFrame:
     """Exécuter une requête et retourner un DataFrame.
 
@@ -791,6 +814,7 @@ def query_to_dataframe(sql: str, params: dict = None) -> pd.DataFrame:
     return pd.DataFrame(results) if results else pd.DataFrame()
 
 
+@st.cache_data(ttl=3600)
 def get_operations_dataframe(
     cross: str = None,
     date_debut: date = None,
@@ -848,6 +872,7 @@ def get_operations_dataframe(
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_audit_logs(
     table_name: str = None,
     operation_type: str = None,
@@ -899,6 +924,7 @@ def get_audit_logs(
     )
 
 
+@st.cache_data(ttl=3600)
 def get_audit_stats() -> dict:
     """Statistiques sur l'audit.
 
@@ -926,6 +952,7 @@ def get_audit_stats() -> dict:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_all_tables() -> list[str]:
     """Liste des tables du schema clean.
 
@@ -943,6 +970,7 @@ def get_all_tables() -> list[str]:
     return [r["table_name"] for r in results]
 
 
+@st.cache_data(ttl=3600)
 def get_table_schema(table_name: str) -> list[dict]:
     """Recuperer le schema d'une table depuis information_schema.
 
@@ -968,6 +996,7 @@ def get_table_schema(table_name: str) -> list[dict]:
     return execute_raw_sql(sql, {"table_name": table_name})
 
 
+@st.cache_data(ttl=3600)
 def get_primary_keys() -> list[dict]:
     """Recuperer les cles primaires de toutes les tables.
 
@@ -989,6 +1018,7 @@ def get_primary_keys() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_foreign_keys() -> list[dict]:
     """Recuperer les relations FK pour generer le diagramme ER.
 
@@ -1016,6 +1046,7 @@ def get_foreign_keys() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_table_indexes(table_name: str = None) -> list[dict]:
     """Recuperer les index d'une table ou de toutes les tables.
 
@@ -1038,6 +1069,7 @@ def get_table_indexes(table_name: str = None) -> list[dict]:
     return execute_raw_sql(sql, {"table_name": table_name})
 
 
+@st.cache_data(ttl=3600)
 def get_audited_tables() -> list[str]:
     """Recuperer la liste des tables presentes dans audit_log.
 
@@ -1053,6 +1085,7 @@ def get_audited_tables() -> list[str]:
     return [r["table_name"] for r in results] if results else []
 
 
+@st.cache_data(ttl=3600)
 def generate_mermaid_er() -> str:
     """Generer le code Mermaid ER depuis les FK de la base.
 

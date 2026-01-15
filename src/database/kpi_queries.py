@@ -34,6 +34,7 @@ Usage:
 from datetime import date
 from typing import Optional
 import pandas as pd
+import streamlit as st
 
 from src.database.connection import execute_raw_sql
 
@@ -85,6 +86,7 @@ def _build_cross_name_filter() -> tuple[str, dict]:
 # KPIs de Sécurité Maritime
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_securite_mensuel(
     annee: Optional[int] = None,
     mois: Optional[int] = None,
@@ -163,6 +165,7 @@ def get_kpi_securite_mensuel(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_securite_global(
     date_debut: Optional[date] = None,
     date_fin: Optional[date] = None,
@@ -230,6 +233,7 @@ def get_kpi_securite_global(
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_lives_saved(
     annee: Optional[int] = None,
     cross_actifs_seulement: bool = False,
@@ -283,6 +287,7 @@ def get_kpi_lives_saved(
 # KPIs Performance CROSS (Benchmarking)
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_cross_benchmark(
     cross_filter: Optional[str] = None,
     top_n: Optional[int] = None,
@@ -330,6 +335,7 @@ def get_kpi_cross_benchmark(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_cross_detail(
     cross_name: str,
     cross_actifs_seulement: bool = False,
@@ -363,6 +369,7 @@ def get_kpi_cross_detail(
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_cross_ranking(
     metric: str = "sauvetage",
     cross_filter: Optional[str] = None,
@@ -412,6 +419,7 @@ def get_kpi_cross_ranking(
 # KPIs Flotteurs (Analyse sectorielle)
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_flotteurs_analyse(
     categorie: Optional[str] = None,
     type_flotteur: Optional[str] = None,
@@ -478,6 +486,7 @@ def get_kpi_flotteurs_analyse(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_flotteurs_par_categorie(
     categorie: Optional[str] = None,
     cross_actifs_seulement: bool = False,
@@ -539,6 +548,7 @@ def get_kpi_flotteurs_par_categorie(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_flotteurs_sports_nautiques(
     categorie: Optional[str] = None,
     cross_actifs_seulement: bool = False,
@@ -603,6 +613,7 @@ def get_kpi_flotteurs_sports_nautiques(
 # KPIs Temporels et Saisonnalité
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_temporel_multidim(
     annee: Optional[int] = None,
     phase_journee: Optional[str] = None,
@@ -639,6 +650,7 @@ def get_kpi_temporel_multidim(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_saisonnalite_mensuelle(
     annee: Optional[int] = None,
     cross_actifs_seulement: bool = False,
@@ -693,6 +705,7 @@ def get_kpi_saisonnalite_mensuelle(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_phase_journee(
     annee: Optional[int] = None,
     cross_actifs_seulement: bool = False,
@@ -750,6 +763,7 @@ def get_kpi_phase_journee(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_impact_vacances(
     annee: Optional[int] = None,
     cross_actifs_seulement: bool = False,
@@ -809,6 +823,7 @@ def get_kpi_impact_vacances(
 # KPIs Météorologiques
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_meteo_correlation(
     vent_min: Optional[int] = None,
     vent_max: Optional[int] = None,
@@ -882,6 +897,7 @@ def get_kpi_meteo_correlation(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_meteo_par_force_vent(
     annee: Optional[int] = None,
     cross_actifs_seulement: bool = False,
@@ -941,6 +957,7 @@ def get_kpi_meteo_par_force_vent(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_meteo_par_etat_mer(
     annee: Optional[int] = None,
     cross_actifs_seulement: bool = False,
@@ -1004,6 +1021,7 @@ def get_kpi_meteo_par_etat_mer(
 # KPIs Year-over-Year (Comparatifs annuels)
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_yoy_comparison(
     annee: Optional[int] = None,
     limit: int = 10,
@@ -1078,6 +1096,7 @@ def get_kpi_yoy_comparison(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_yoy_latest(cross_actifs_seulement: bool = False) -> dict:
     """Récupérer les KPIs de l'année en cours vs année précédente.
 
@@ -1095,6 +1114,7 @@ def get_kpi_yoy_latest(cross_actifs_seulement: bool = False) -> dict:
 # KPIs Alertes et Anomalies
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_alertes_anomalies(
     niveau_alerte: Optional[str] = None,
     limit: int = 12,
@@ -1197,6 +1217,7 @@ def get_kpi_alertes_anomalies(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_alertes_actives(
     annee: Optional[int] = None,
     cross: Optional[str] = None,
@@ -1303,6 +1324,7 @@ def get_kpi_alertes_actives(
 # KPIs Géographiques
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_geographique(
     prefecture: Optional[str] = None,
     cross_name: Optional[str] = None,
@@ -1335,6 +1357,7 @@ def get_kpi_geographique(
     return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_kpi_par_prefecture() -> list[dict]:
     """Récupérer les KPIs agrégés par préfecture maritime.
 
@@ -1365,6 +1388,7 @@ def get_kpi_par_prefecture() -> list[dict]:
 # KPIs par Type d'Opération
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def get_kpi_type_operation(
     type_op: Optional[str] = None,
     categorie_evenement: Optional[str] = None
@@ -1394,6 +1418,7 @@ def get_kpi_type_operation(
 # Export DataFrame pour Power BI
 # =============================================================================
 
+@st.cache_data(ttl=3600)
 def export_kpi_to_dataframe(vue_name: str) -> pd.DataFrame:
     """Exporter une vue KPI complète en DataFrame.
 
