@@ -1,0 +1,44 @@
+[pytest]
+# Configuration pytest pour le projet la_peche_NILE_LEPRECHAUNS
+
+# Répertoires de test
+testpaths = test
+
+# Motifs de recherche des fichiers de test
+python_files = test_*.py
+
+# Motifs de recherche des classes de test
+python_classes = Test*
+
+# Motifs de recherche des fonctions de test
+python_functions = test_*
+
+# Options d'affichage
+addopts =
+    -v
+    --strict-markers
+    --tb=short
+    --cov=src
+    --cov-report=term-missing
+    --cov-report=html
+    --cov-branch
+
+# Markers personnalisés (à ajouter selon les besoins)
+markers =
+    slow: marks tests as slow (deselect with '-m "not slow"')
+    integration: marks tests as integration tests
+    unit: marks tests as unit tests
+
+# Configuration de la couverture
+[coverage:run]
+source = src
+omit =
+    */tests/*
+    */test_*
+    */__pycache__/*
+    */.venv/*
+
+[coverage:report]
+precision = 2
+show_missing = True
+skip_covered = False
