@@ -233,3 +233,58 @@ def get_resultat_emoji(resultat: str) -> str:
         L'emoji correspondant, ou "⚪" si inconnu
     """
     return RESULTAT_EMOJI.get(resultat, "⚪")
+
+
+# =============================================================================
+# References detaillees - Types d'operation CROSS
+# =============================================================================
+TYPE_OPERATION_DETAILS = {
+    "SAR": {
+        "nom": "Search and Rescue",
+        "description": "Vie humaine en danger",
+        "emoji": "🆘"
+    },
+    "MAS": {
+        "nom": "Maritime Assistance Service",
+        "description": "Assistance aux navires",
+        "emoji": "🚢"
+    },
+    "SUR": {
+        "nom": "Surete",
+        "description": "Surete des navires",
+        "emoji": "🛡️"
+    },
+    "POL": {
+        "nom": "Pollution",
+        "description": "Pollutions maritimes",
+        "emoji": "🛢️"
+    },
+    "DIV": {
+        "nom": "Divers",
+        "description": "Autres cas",
+        "emoji": "📋"
+    },
+}
+
+
+# =============================================================================
+# Echelle Douglas - Etat de la mer
+# =============================================================================
+ECHELLE_DOUGLAS = [
+    {"etat": "0-2", "description": "Calme a belle", "hauteur_vagues": "0-0.5 m"},
+    {"etat": "3-4", "description": "Peu agitee a agitee", "hauteur_vagues": "0.5-2.5 m"},
+    {"etat": "5-6", "description": "Forte a tres forte", "hauteur_vagues": "2.5-6 m"},
+    {"etat": "7-9", "description": "Grosse a enorme", "hauteur_vagues": ">6 m"},
+]
+
+
+# =============================================================================
+# Echelle Beaufort - Force du vent
+# =============================================================================
+ECHELLE_BEAUFORT = [
+    {"force": "0-3", "description": "Calme a legere brise", "vent_kmh": "0-19"},
+    {"force": "4-5", "description": "Jolie brise a bonne brise", "vent_kmh": "20-38"},
+    {"force": "6-7", "description": "Vent frais a grand frais", "vent_kmh": "39-61"},
+    {"force": "8-9", "description": "Coup de vent a fort coup de vent", "vent_kmh": "62-88"},
+    {"force": "10-12", "description": "Tempete a ouragan", "vent_kmh": ">88"},
+]

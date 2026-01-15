@@ -175,7 +175,12 @@ def login_page() -> Optional[bool]:
     try:
         authenticator.login(location="main")
     except Exception as e:
-        st.error(f"Erreur d'authentification: {e}")
+        # Effacer la session corrompue pour permettre une nouvelle connexion
+        for key in ["authentication_status", "username", "name", "authenticated", "role"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.warning("Session expirée ou invalide. Veuillez vous reconnecter.")
+        st.rerun()
         return None
 
     # Récupérer les valeurs depuis session_state (nouvelle API)

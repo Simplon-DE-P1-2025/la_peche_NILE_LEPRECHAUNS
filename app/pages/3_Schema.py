@@ -8,7 +8,6 @@ Cette page affiche:
 L'approche "data-driven" garantit que la documentation reste
 synchronisee avec le schema reel de la base de donnees.
 
-Auteur: Equipe Sprint 3-4
 Date: Janvier 2026
 """
 
