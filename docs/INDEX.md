@@ -23,7 +23,8 @@ la_peche_NILE_LEPRECHAUNS/
 │   ├── schema/             # Generation de formulaires
 │   ├── validation/         # Validation des donnees
 │   ├── etl/                # Pipeline ETL
-│   └── analytics/          # Requetes analytiques
+│   ├── analytics/          # Requetes analytiques
+│   └── utils/              # Utilitaires
 ├── sql/                    # Scripts SQL
 ├── config/                 # Configuration YAML
 ├── data/                   # Donnees locales
@@ -53,6 +54,7 @@ la_peche_NILE_LEPRECHAUNS/
 | [src/validation/README.md](../src/validation/README.md) | Validation des donnees (Pandera) |
 | [src/etl/README.md](../src/etl/README.md) | Pipeline ETL |
 | [src/analytics/README.md](../src/analytics/README.md) | Requetes analytiques |
+| [src/utils/README.md](../src/utils/README.md) | Utilitaires (performance, filtres, warmload) |
 
 ### Infrastructure
 
@@ -66,6 +68,8 @@ la_peche_NILE_LEPRECHAUNS/
 | Document | Description |
 |----------|-------------|
 | [KPI_DOCUMENTATION.md](KPI_DOCUMENTATION.md) | Documentation complete des KPIs |
+| [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) | Guide d'optimisation des performances |
+| [PROMPT_CONTINUATION_PERFORMANCE.md](PROMPT_CONTINUATION_PERFORMANCE.md) | Documentation sur la continuation des prompts |
 
 ---
 
@@ -108,7 +112,7 @@ uv run python src/main.py
 ```
 ┌─────────────────────────────────────────┐
 │  APP (Streamlit)                        │  Interface utilisateur
-│  10 pages + composants reutilisables    │
+│  11 pages + composants reutilisables    │
 ├─────────────────────────────────────────┤
 │  SRC (Logique Metier)                   │
 │  ├─ Schema (Formulaires)                │
