@@ -7,9 +7,9 @@ Cette page permet de:
 - Modifier/supprimer des operations existantes (selon roles)
 - Gerer les flotteurs et resultats directement depuis le detail
 
-Auteur: Equipe Sprint 3-4
 Date: Janvier 2026
 """
+
 import streamlit as st
 import sys
 from pathlib import Path
@@ -21,10 +21,18 @@ from src.auth.authentificator import login_required, show_user_info, has_role
 from src.database.connection import get_session
 from src.database.crud import crud_operation
 
-from app.components.state import init_state, set_view, select_operation, start_edit_operation
+from app.components.state import (
+    init_state,
+    set_view,
+    select_operation,
+    start_edit_operation,
+)
 from app.components.operations.list import render_filters, render_list
 from app.components.operations.detail import render_header
-from app.components.operations.form import dialog_create_operation, dialog_edit_operation
+from app.components.operations.form import (
+    dialog_create_operation,
+    dialog_edit_operation,
+)
 from app.components.flotteurs.list import render_flotteur_list
 from app.components.flotteurs.form import dialog_create_flotteur, dialog_edit_flotteur
 from app.components.resultats.list import render_resultat_list
@@ -34,11 +42,7 @@ from app.components.resultats.form import dialog_create_resultat, dialog_edit_re
 # =============================================================================
 # Configuration de la page Streamlit
 # =============================================================================
-st.set_page_config(
-    page_title="Operations SECMAR",
-    page_icon=":mag:",
-    layout="wide"
-)
+st.set_page_config(page_title="Operations SECMAR", page_icon=":mag:", layout="wide")
 
 
 # =============================================================================
@@ -65,7 +69,10 @@ st.title(":mag: Gestion des Operations")
 col1, col2, col3 = st.columns([1, 1, 4])
 
 with col1:
-    if st.button(":clipboard: Liste", type="secondary" if st.session_state.get("ops_view") != "list" else "primary"):
+    if st.button(
+        ":clipboard: Liste",
+        type="secondary" if st.session_state.get("ops_view") != "list" else "primary",
+    ):
         set_view("list")
         st.rerun()
 

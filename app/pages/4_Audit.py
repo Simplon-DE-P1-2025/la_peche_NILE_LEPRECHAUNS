@@ -9,9 +9,9 @@ Cette page affiche le journal d'audit avec:
 L'audit est alimente par des triggers PostgreSQL, ce qui garantit
 la capture de TOUTES les modifications (meme hors application).
 
-Auteur: Equipe Sprint 3-4
 Date: Janvier 2026
 """
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -30,11 +30,7 @@ from src.database.raw_queries import get_audit_logs, get_audit_stats, get_audite
 # =============================================================================
 # Configuration de la page Streamlit
 # =============================================================================
-st.set_page_config(
-    page_title="Audit SECMAR",
-    page_icon="📋",
-    layout="wide"
-)
+st.set_page_config(page_title="Audit SECMAR", page_icon="📋", layout="wide")
 
 
 # =============================================================================
@@ -61,7 +57,9 @@ if stats and stats.get("total_entries", 0) > 0:
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.metric("Total entrées", f"{stats.get('total_entries', 0):,}".replace(",", " "))
+        st.metric(
+            "Total entrées", f"{stats.get('total_entries', 0):,}".replace(",", " ")
+        )
 
     with col2:
         st.metric("🟢 Insertions", stats.get("total_inserts", 0))
@@ -89,12 +87,15 @@ with col1:
     audited_tables = get_audited_tables()
     if not audited_tables:
         # Fallback si audit_log est vide
-        audited_tables = ["operations", "flotteurs", "resultats_humain", "operations_stats"]
+        audited_tables = [
+            "operations",
+            "flotteurs",
+            "resultats_humain",
+            "operations_stats",
+        ]
 
     filter_table = st.selectbox(
-        "Table",
-        options=["Toutes"] + audited_tables,
-        key="audit_table"
+        "Table", options=["Toutes"] + audited_tables, key="audit_table"
     )
     filter_table = None if filter_table == "Toutes" else filter_table
 
@@ -102,7 +103,7 @@ with col2:
     filter_operation = st.selectbox(
         "Type d'opération",
         options=["Toutes", "INSERT", "UPDATE", "DELETE"],
-        key="audit_op"
+        key="audit_op",
     )
     filter_operation = None if filter_operation == "Toutes" else filter_operation
 
@@ -112,9 +113,7 @@ with col3:
 
 with col4:
     filter_date = st.date_input(
-        "Depuis",
-        value=datetime.now() - timedelta(days=7),
-        key="audit_date"
+        "Depuis", value=datetime.now() - timedelta(days=7), key="audit_date"
     )
 
 limit = st.slider("Nombre d'entrées", min_value=50, max_value=1000, value=200, step=50)
@@ -129,7 +128,7 @@ results = get_audit_logs(
     operation_type=filter_operation,
     user_id=filter_user,
     date_debut=filter_date,
-    limit=limit
+    limit=limit,
 )
 
 st.caption(f"Affichage de {len(results)} entrées")
@@ -139,11 +138,9 @@ if results:
     data = []
     for r in results:
         # Emoji selon le type d'opération
-        emoji = {
-            "INSERT": "🟢",
-            "UPDATE": "🟡",
-            "DELETE": "🔴"
-        }.get(r.get("operation_type"), "⚪")
+        emoji = {"INSERT": "🟢", "UPDATE": "🟡", "DELETE": "🔴"}.get(
+            r.get("operation_type"), "⚪"
+        )
 
         # Formater le timestamp
         ts = r.get("timestamp")
@@ -155,14 +152,16 @@ if results:
         else:
             ts_str = "-"
 
-        data.append({
-            "Date/Heure": ts_str,
-            "Table": r.get("table_name", "-"),
-            "Action": f"{emoji} {r.get('operation_type', '-')}",
-            "ID Record": r.get("record_id", "-"),
-            "Utilisateur": r.get("user_id", "system"),
-            "Champs modifiés": ", ".join(r.get("changed_fields") or []) or "-"
-        })
+        data.append(
+            {
+                "Date/Heure": ts_str,
+                "Table": r.get("table_name", "-"),
+                "Action": f"{emoji} {r.get('operation_type', '-')}",
+                "ID Record": r.get("record_id", "-"),
+                "Utilisateur": r.get("user_id", "system"),
+                "Champs modifiés": ", ".join(r.get("changed_fields") or []) or "-",
+            }
+        )
 
     df = pd.DataFrame(data)
 
@@ -172,7 +171,7 @@ if results:
         use_container_width=True,
         hide_index=True,
         on_select="rerun",
-        selection_mode="single-row"
+        selection_mode="single-row",
     )
 
     # Détail si sélectionné
@@ -221,11 +220,13 @@ if results:
                     new_vals = json.loads(new_vals)
 
                 for field in changed_fields:
-                    diff_data.append({
-                        "Champ": field,
-                        "Avant": str(old_vals.get(field, "-")),
-                        "Après": str(new_vals.get(field, "-"))
-                    })
+                    diff_data.append(
+                        {
+                            "Champ": field,
+                            "Avant": str(old_vals.get(field, "-")),
+                            "Après": str(new_vals.get(field, "-")),
+                        }
+                    )
 
                 st.dataframe(pd.DataFrame(diff_data), hide_index=True)
 
@@ -242,17 +243,23 @@ with st.expander("📥 Exporter les logs"):
         # Préparer pour export
         export_data = []
         for r in results:
-            export_data.append({
-                "id": r.get("id"),
-                "timestamp": str(r.get("timestamp")),
-                "table_name": r.get("table_name"),
-                "operation_type": r.get("operation_type"),
-                "record_id": r.get("record_id"),
-                "user_id": r.get("user_id"),
-                "changed_fields": ", ".join(r.get("changed_fields") or []),
-                "old_values": json.dumps(r.get("old_values")) if r.get("old_values") else "",
-                "new_values": json.dumps(r.get("new_values")) if r.get("new_values") else "",
-            })
+            export_data.append(
+                {
+                    "id": r.get("id"),
+                    "timestamp": str(r.get("timestamp")),
+                    "table_name": r.get("table_name"),
+                    "operation_type": r.get("operation_type"),
+                    "record_id": r.get("record_id"),
+                    "user_id": r.get("user_id"),
+                    "changed_fields": ", ".join(r.get("changed_fields") or []),
+                    "old_values": (
+                        json.dumps(r.get("old_values")) if r.get("old_values") else ""
+                    ),
+                    "new_values": (
+                        json.dumps(r.get("new_values")) if r.get("new_values") else ""
+                    ),
+                }
+            )
 
         df_export = pd.DataFrame(export_data)
         csv = df_export.to_csv(index=False)
@@ -261,7 +268,7 @@ with st.expander("📥 Exporter les logs"):
             label="Télécharger en CSV",
             data=csv,
             file_name=f"audit_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
+            mime="text/csv",
         )
     else:
         st.info("Pas de données à exporter")
@@ -272,7 +279,8 @@ with st.expander("📥 Exporter les logs"):
 st.divider()
 
 with st.expander("ℹ️ A propos de l'audit"):
-    st.markdown("""
+    st.markdown(
+        """
     ### Comment fonctionne l'audit ?
 
     L'audit est géré par des **triggers PostgreSQL** qui s'exécutent automatiquement
@@ -302,4 +310,5 @@ with st.expander("ℹ️ A propos de l'audit"):
     - ✅ Aucun code à maintenir côté application
     - ✅ Performance optimale
     - ✅ Impossible à contourner
-    """)
+    """
+    )
