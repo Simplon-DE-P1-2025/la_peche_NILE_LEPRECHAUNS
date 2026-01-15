@@ -63,7 +63,7 @@ from sqlalchemy import create_engine, text, MetaData
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 
-from config import DATABASE_URL, DB_SCHEMA, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
+from src.config import DATABASE_URL, DB_SCHEMA, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
 
 # Base class for all SQLAlchemy models - utilise le schéma configuré (clean par défaut)
 Base = declarative_base(metadata=MetaData(schema=DB_SCHEMA))
@@ -154,6 +154,42 @@ def get_raw_connection(schema: str = None):
         raise
     finally:
         conn.close()
+
+
+@contextmanager
+def etl_session(schema: str = None) -> Generator[Session, None, None]:
+    """Context manager pour opérations ETL (audit granulaire désactivé).
+
+    Pendant les opérations ETL, l'audit ne génère pas d'entrées par ligne.
+    À la fin de l'ETL, vous devez logger manuellement un résumé.
+
+    Args:
+        schema: Schéma à utiliser (défaut: DB_SCHEMA de config)
+
+    Usage:
+        with etl_session() as session:
+            # Toutes les opérations ici ne génèrent PAS d'audit granulaire
+            session.execute(text("TRUNCATE operations CASCADE"))
+            # ... bulk inserts ...
+
+            # Logger un résumé à la fin
+            session.execute(text('''
+                INSERT INTO audit_log (table_name, operation_type, new_values, user_id)
+                VALUES ('operations', 'ETL_LOAD', '{"rows": 10000}', 'system')
+            '''))
+    """
+    session = SessionLocal()
+    try:
+        target_schema = schema or DB_SCHEMA
+        session.execute(text(f"SET search_path TO {target_schema}"))
+        session.execute(text("SET LOCAL app.etl_mode = 'true'"))
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 # =============================================================================

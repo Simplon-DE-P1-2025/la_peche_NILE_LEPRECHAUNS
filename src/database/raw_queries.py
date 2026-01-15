@@ -17,8 +17,27 @@ Usage:
 from datetime import date
 from typing import Optional
 import pandas as pd
+import streamlit as st
 
 from src.database.connection import execute_raw_sql
+
+
+# =============================================================================
+# Liste des CROSS actuellement actifs (en vigueur)
+# =============================================================================
+CROSS_ACTIFS = [
+    "Antilles-Guyane",
+    "Corse",
+    "Corsen",
+    "Étel",
+    "Etel",  # Variante sans accent
+    "Gris-Nez",
+    "Jobourg",
+    "La Garde",
+    "Nouvelle-Calédonie",
+    "Polynésie",
+    "Sud océan Indien",
+]
 
 
 # =============================================================================
@@ -26,52 +45,137 @@ from src.database.connection import execute_raw_sql
 # =============================================================================
 
 
-def get_kpis() -> dict:
+def _build_cross_filter() -> tuple[str, dict]:
+    """Construit la clause WHERE et les paramètres pour filtrer par CROSS actifs.
+
+    Returns:
+        Tuple (clause_sql, params_dict)
+    """
+    placeholders = ", ".join([f":cross_{i}" for i in range(len(CROSS_ACTIFS))])
+    params = {f"cross_{i}": cross for i, cross in enumerate(CROSS_ACTIFS)}
+    return f'o."cross" IN ({placeholders})', params
+
+
+@st.cache_data(ttl=3600)
+def get_kpis(cross_actifs_seulement: bool = False) -> dict:
     """Récupérer les KPIs principaux du dashboard.
+
+    Args:
+        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
 
     Returns:
         Dictionnaire avec les KPIs globaux
     """
-    sql = """
-    SELECT
-        COUNT(*) as total_operations,
-        COUNT(DISTINCT o."cross") as nb_cross,
-        COUNT(DISTINCT o.departement) as nb_departements,
-        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
-        MIN(o.date_heure_reception_alerte) as premiere_operation,
-        MAX(o.date_heure_reception_alerte) as derniere_operation
-    FROM operations o
-    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
-    WHERE o.date_heure_reception_alerte IS NOT NULL
-    """
-    result = execute_raw_sql(sql)
+    if cross_actifs_seulement:
+        cross_clause, params = _build_cross_filter()
+        sql = f"""
+        SELECT
+            COUNT(*) as total_operations,
+            COUNT(DISTINCT o."cross") as nb_cross,
+            COUNT(DISTINCT o.departement) as nb_departements,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
+            MIN(o.date_heure_reception_alerte) as premiere_operation,
+            MAX(o.date_heure_reception_alerte) as derniere_operation
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE o.date_heure_reception_alerte IS NOT NULL
+          AND {cross_clause}
+        """
+        result = execute_raw_sql(sql, params)
+    else:
+        sql = """
+        SELECT
+            COUNT(*) as total_operations,
+            COUNT(DISTINCT o."cross") as nb_cross,
+            COUNT(DISTINCT o.departement) as nb_departements,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
+            MIN(o.date_heure_reception_alerte) as premiere_operation,
+            MAX(o.date_heure_reception_alerte) as derniere_operation
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE o.date_heure_reception_alerte IS NOT NULL
+        """
+        result = execute_raw_sql(sql)
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
+def get_nb_cross(actifs_seulement: bool = True) -> int:
+    """Compte le nombre de CROSS présents dans les données.
+
+    Args:
+        actifs_seulement: Si True, compte uniquement les CROSS actifs (défaut).
+                         Si False, compte tous les CROSS.
+
+    Returns:
+        Nombre de CROSS distincts
+    """
+    if actifs_seulement:
+        # Construire la clause IN avec des paramètres nommés individuels
+        # (SQLAlchemy text() ne supporte pas les listes pour ANY())
+        placeholders = ", ".join([f":cross_{i}" for i in range(len(CROSS_ACTIFS))])
+        params = {f"cross_{i}": cross for i, cross in enumerate(CROSS_ACTIFS)}
+        sql = f"""
+        SELECT COUNT(DISTINCT o."cross") as nb_cross
+        FROM operations o
+        WHERE o."cross" IN ({placeholders})
+        """
+        result = execute_raw_sql(sql, params)
+    else:
+        sql = """
+        SELECT COUNT(DISTINCT o."cross") as nb_cross
+        FROM operations o
+        WHERE o."cross" IS NOT NULL
+        """
+        result = execute_raw_sql(sql)
+    return result[0]["nb_cross"] if result else 0
+
+
+@st.cache_data(ttl=3600)
 def get_kpis_by_period(
-    date_debut: Optional[date] = None, date_fin: Optional[date] = None
+    date_debut: Optional[date] = None,
+    date_fin: Optional[date] = None,
+    cross_actifs_seulement: bool = False,
 ) -> dict:
     """KPIs pour une période donnée.
 
     Args:
         date_debut: Date de début (optionnel)
         date_fin: Date de fin (optionnel)
+        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
 
     Returns:
         Dictionnaire avec les KPIs de la période
     """
-    sql = """
-    SELECT
-        COUNT(*) as total_operations,
-        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
-        COUNT(DISTINCT o."cross") as nb_cross
-    FROM operations o
-    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
-    WHERE 1=1
-        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
-        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
-    """
     params = {"date_debut": date_debut, "date_fin": date_fin}
+
+    if cross_actifs_seulement:
+        cross_clause, cross_params = _build_cross_filter()
+        params.update(cross_params)
+        sql = f"""
+        SELECT
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
+            COUNT(DISTINCT o."cross") as nb_cross
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE 1=1
+            AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+            AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+            AND {cross_clause}
+        """
+    else:
+        sql = """
+        SELECT
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes,
+            COUNT(DISTINCT o."cross") as nb_cross
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE 1=1
+            AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+            AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+        """
     result = execute_raw_sql(sql, params)
     return result[0] if result else {}
 
@@ -81,43 +185,81 @@ def get_kpis_by_period(
 # =============================================================================
 
 
-def get_operations_by_cross() -> list[dict]:
+@st.cache_data(ttl=3600)
+def get_operations_by_cross(cross_actifs_seulement: bool = False) -> list[dict]:
     """Nombre d'opérations par CROSS.
+
+    Args:
+        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
 
     Returns:
         Liste de dictionnaires {cross, total_operations, total_personnes}
     """
-    sql = """
-    SELECT
-        COALESCE(o."cross", 'Non renseigné') as cross,
-        COUNT(*) as total_operations,
-        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
-    FROM operations o
-    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
-    GROUP BY COALESCE(o."cross", 'Non renseigné')
-    ORDER BY total_operations DESC
-    """
-    return execute_raw_sql(sql)
+    if cross_actifs_seulement:
+        cross_clause, params = _build_cross_filter()
+        sql = f"""
+        SELECT
+            COALESCE(o."cross", 'Non renseigné') as cross,
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE {cross_clause}
+        GROUP BY COALESCE(o."cross", 'Non renseigné')
+        ORDER BY total_operations DESC
+        """
+        return execute_raw_sql(sql, params)
+    else:
+        sql = """
+        SELECT
+            COALESCE(o."cross", 'Non renseigné') as cross,
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        GROUP BY COALESCE(o."cross", 'Non renseigné')
+        ORDER BY total_operations DESC
+        """
+        return execute_raw_sql(sql)
 
 
-def get_operations_by_type() -> list[dict]:
+@st.cache_data(ttl=3600)
+def get_operations_by_type(cross_actifs_seulement: bool = False) -> list[dict]:
     """Répartition par type d'opération.
+
+    Args:
+        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
 
     Returns:
         Liste de dictionnaires {type_operation, total, pourcentage}
     """
-    sql = """
-    SELECT
-        COALESCE(type_operation, 'Autre') as type_operation,
-        COUNT(*) as total,
-        ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER(), 0), 2) as pourcentage
-    FROM operations
-    GROUP BY COALESCE(type_operation, 'Autre')
-    ORDER BY total DESC
-    """
-    return execute_raw_sql(sql)
+    if cross_actifs_seulement:
+        cross_clause, params = _build_cross_filter()
+        sql = f"""
+        SELECT
+            COALESCE(o.type_operation, 'Autre') as type_operation,
+            COUNT(*) as total,
+            ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER(), 0), 2) as pourcentage
+        FROM operations o
+        WHERE {cross_clause}
+        GROUP BY COALESCE(o.type_operation, 'Autre')
+        ORDER BY total DESC
+        """
+        return execute_raw_sql(sql, params)
+    else:
+        sql = """
+        SELECT
+            COALESCE(type_operation, 'Autre') as type_operation,
+            COUNT(*) as total,
+            ROUND(100.0 * COUNT(*) / NULLIF(SUM(COUNT(*)) OVER(), 0), 2) as pourcentage
+        FROM operations
+        GROUP BY COALESCE(type_operation, 'Autre')
+        ORDER BY total DESC
+        """
+        return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_operations_by_department(limit: int = 20) -> list[dict]:
     """Opérations par département.
 
@@ -142,6 +284,7 @@ def get_operations_by_department(limit: int = 20) -> list[dict]:
     return execute_raw_sql(sql, {"limit": limit})
 
 
+@st.cache_data(ttl=3600)
 def get_cross_list() -> list[str]:
     """Récupérer la liste des CROSS distincts.
 
@@ -158,6 +301,7 @@ def get_cross_list() -> list[str]:
     return [r["cross"] for r in results]
 
 
+@st.cache_data(ttl=3600)
 def get_type_list() -> list[str]:
     """Récupérer la liste des types d'opération distincts.
 
@@ -179,10 +323,12 @@ def get_type_list() -> list[str]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_operations_timeline(
     granularity: str = "month",
     date_debut: Optional[date] = None,
     date_fin: Optional[date] = None,
+    cross_actifs_seulement: bool = False,
 ) -> list[dict]:
     """Évolution du nombre d'opérations dans le temps.
 
@@ -190,6 +336,7 @@ def get_operations_timeline(
         granularity: 'day', 'week', 'month', 'year'
         date_debut: Date de début (optionnel)
         date_fin: Date de fin (optionnel)
+        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
 
     Returns:
         Liste de dictionnaires {periode, total_operations, total_personnes}
@@ -198,22 +345,43 @@ def get_operations_timeline(
         granularity, "month"
     )
 
-    sql = f"""
-    SELECT
-        DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte) as periode,
-        COUNT(*) as total_operations,
-        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
-    FROM operations o
-    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
-    WHERE o.date_heure_reception_alerte IS NOT NULL
-        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
-        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
-    GROUP BY DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte)
-    ORDER BY periode
-    """
-    return execute_raw_sql(sql, {"date_debut": date_debut, "date_fin": date_fin})
+    params = {"date_debut": date_debut, "date_fin": date_fin}
+
+    if cross_actifs_seulement:
+        cross_clause, cross_params = _build_cross_filter()
+        params.update(cross_params)
+        sql = f"""
+        SELECT
+            DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte) as periode,
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE o.date_heure_reception_alerte IS NOT NULL
+            AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+            AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+            AND {cross_clause}
+        GROUP BY DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte)
+        ORDER BY periode
+        """
+    else:
+        sql = f"""
+        SELECT
+            DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte) as periode,
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE o.date_heure_reception_alerte IS NOT NULL
+            AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+            AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+        GROUP BY DATE_TRUNC('{date_trunc}', o.date_heure_reception_alerte)
+        ORDER BY periode
+        """
+    return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_monthly_comparison() -> list[dict]:
     """Comparaison mois par mois sur plusieurs années.
 
@@ -233,24 +401,44 @@ def get_monthly_comparison() -> list[dict]:
     return execute_raw_sql(sql)
 
 
-def get_yearly_stats() -> list[dict]:
+@st.cache_data(ttl=3600)
+def get_yearly_stats(cross_actifs_seulement: bool = False) -> list[dict]:
     """Statistiques annuelles.
+
+    Args:
+        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
 
     Returns:
         Liste de dictionnaires avec stats par année
     """
-    sql = """
-    SELECT
-        EXTRACT(YEAR FROM o.date_heure_reception_alerte)::int as annee,
-        COUNT(*) as total_operations,
-        COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
-    FROM operations o
-    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
-    WHERE o.date_heure_reception_alerte IS NOT NULL
-    GROUP BY annee
-    ORDER BY annee DESC
-    """
-    return execute_raw_sql(sql)
+    if cross_actifs_seulement:
+        cross_clause, params = _build_cross_filter()
+        sql = f"""
+        SELECT
+            EXTRACT(YEAR FROM o.date_heure_reception_alerte)::int as annee,
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE o.date_heure_reception_alerte IS NOT NULL
+            AND {cross_clause}
+        GROUP BY annee
+        ORDER BY annee DESC
+        """
+        return execute_raw_sql(sql, params)
+    else:
+        sql = """
+        SELECT
+            EXTRACT(YEAR FROM o.date_heure_reception_alerte)::int as annee,
+            COUNT(*) as total_operations,
+            COALESCE(SUM(s.nombre_impliques), 0) as total_personnes
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE o.date_heure_reception_alerte IS NOT NULL
+        GROUP BY annee
+        ORDER BY annee DESC
+        """
+        return execute_raw_sql(sql)
 
 
 # =============================================================================
@@ -258,31 +446,36 @@ def get_yearly_stats() -> list[dict]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_humain_global() -> dict:
     """Bilan humain global.
 
     Returns:
-        Dictionnaire avec totaux (décédés, disparus, blessés, sauvés, etc.)
+        Dictionnaire avec totaux (décédés, disparus, blessés, saines_sauves, etc.)
     """
     sql = """
     SELECT
         COALESCE(SUM(nombre_decedes), 0) as total_decedes,
         COALESCE(SUM(nombre_disparus), 0) as total_disparus,
         COALESCE(SUM(nombre_blesses), 0) as total_blesses,
-        COALESCE(SUM(nombre_sauves), 0) as total_sauves,
+        COALESCE(SUM(nombre_saines_sauves), 0) as total_saines_sauves,
+        COALESCE(SUM(nombre_secourues), 0) as total_secourues,
+        COALESCE(SUM(nombre_assistees), 0) as total_assistees,
+        COALESCE(SUM(nombre_retrouvees), 0) as total_retrouvees,
         COALESCE(SUM(nombre_impliques), 0) as total_impliques,
-        COALESCE(SUM(nombre_assistances), 0) as total_assistances
+        COALESCE(SUM(nombre_prises_en_compte), 0) as total_prises_en_compte
     FROM operations_stats
     """
     result = execute_raw_sql(sql)
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_by_cross() -> list[dict]:
     """Bilan humain par CROSS.
 
     Returns:
-        Liste de dictionnaires {cross, decedes, disparus, blesses, sauves}
+        Liste de dictionnaires {cross, decedes, disparus, blesses, saines_sauves}
     """
     sql = """
     SELECT
@@ -290,76 +483,118 @@ def get_bilan_by_cross() -> list[dict]:
         COALESCE(SUM(s.nombre_decedes), 0) as decedes,
         COALESCE(SUM(s.nombre_disparus), 0) as disparus,
         COALESCE(SUM(s.nombre_blesses), 0) as blesses,
-        COALESCE(SUM(s.nombre_sauves), 0) as sauves
+        COALESCE(SUM(s.nombre_saines_sauves), 0) as saines_sauves
     FROM operations o
     LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
     GROUP BY COALESCE(o."cross", 'Non renseigné')
-    ORDER BY sauves DESC
+    ORDER BY saines_sauves DESC
     """
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_by_cross_filtered(
     date_debut: Optional[date] = None,
-    date_fin: Optional[date] = None
+    date_fin: Optional[date] = None,
+    cross_actifs_seulement: bool = False,
 ) -> list[dict]:
     """Bilan humain par CROSS avec filtres de date.
 
     Args:
         date_debut: Date de début (optionnel)
         date_fin: Date de fin (optionnel)
+        cross_actifs_seulement: Si True, filtre uniquement sur les CROSS actifs.
 
     Returns:
-        Liste de dictionnaires {cross, decedes, disparus, blesses, sauves}
+        Liste de dictionnaires {cross, decedes, disparus, blesses, saines_sauves}
     """
-    sql = """
-    SELECT
-        COALESCE(o."cross", 'Non renseigné') as cross,
-        COALESCE(SUM(s.nombre_decedes), 0) as decedes,
-        COALESCE(SUM(s.nombre_disparus), 0) as disparus,
-        COALESCE(SUM(s.nombre_blesses), 0) as blesses,
-        COALESCE(SUM(s.nombre_sauves), 0) as sauves
-    FROM operations o
-    LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
-    WHERE 1=1
-        AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
-        AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
-    GROUP BY COALESCE(o."cross", 'Non renseigné')
-    ORDER BY sauves DESC
-    """
-    return execute_raw_sql(sql, {"date_debut": date_debut, "date_fin": date_fin})
+    params = {"date_debut": date_debut, "date_fin": date_fin}
+
+    if cross_actifs_seulement:
+        cross_clause, cross_params = _build_cross_filter()
+        params.update(cross_params)
+        sql = f"""
+        SELECT
+            COALESCE(o."cross", 'Non renseigné') as cross,
+            COALESCE(SUM(s.nombre_decedes), 0) as decedes,
+            COALESCE(SUM(s.nombre_disparus), 0) as disparus,
+            COALESCE(SUM(s.nombre_blesses), 0) as blesses,
+            COALESCE(SUM(s.nombre_saines_sauves), 0) as saines_sauves
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE 1=1
+            AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+            AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+            AND {cross_clause}
+        GROUP BY COALESCE(o."cross", 'Non renseigné')
+        ORDER BY saines_sauves DESC
+        """
+    else:
+        sql = """
+        SELECT
+            COALESCE(o."cross", 'Non renseigné') as cross,
+            COALESCE(SUM(s.nombre_decedes), 0) as decedes,
+            COALESCE(SUM(s.nombre_disparus), 0) as disparus,
+            COALESCE(SUM(s.nombre_blesses), 0) as blesses,
+            COALESCE(SUM(s.nombre_saines_sauves), 0) as saines_sauves
+        FROM operations o
+        LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
+        WHERE 1=1
+            AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
+            AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+        GROUP BY COALESCE(o."cross", 'Non renseigné')
+        ORDER BY saines_sauves DESC
+        """
+    return execute_raw_sql(sql, params)
 
 
+@st.cache_data(ttl=3600)
 def get_bilan_by_period(
-    date_debut: Optional[date] = None, date_fin: Optional[date] = None
+    date_debut: Optional[date] = None,
+    date_fin: Optional[date] = None,
+    cross_actifs_seulement: bool = False,
 ) -> dict:
     """Bilan humain pour une période.
 
     Args:
         date_debut: Date de début
         date_fin: Date de fin
+        cross_actifs_seulement: Si True, filtre sur les CROSS actifs uniquement
 
     Returns:
-        Dictionnaire avec le bilan de la période
+        Dictionnaire avec le bilan de la période (nomenclature SECMAR officielle)
     """
-    sql = """
+    params = {"date_debut": date_debut, "date_fin": date_fin}
+
+    cross_clause = ""
+    if cross_actifs_seulement:
+        cross_filter, cross_params = _build_cross_filter()
+        cross_clause = f"AND {cross_filter}"
+        params.update(cross_params)
+
+    sql = f"""
     SELECT
         COALESCE(SUM(s.nombre_decedes), 0) as total_decedes,
         COALESCE(SUM(s.nombre_disparus), 0) as total_disparus,
         COALESCE(SUM(s.nombre_blesses), 0) as total_blesses,
-        COALESCE(SUM(s.nombre_sauves), 0) as total_sauves,
+        COALESCE(SUM(s.nombre_saines_sauves), 0) as total_saines_sauves,
+        COALESCE(SUM(s.nombre_secourues), 0) as total_secourues,
+        COALESCE(SUM(s.nombre_assistees), 0) as total_assistees,
+        COALESCE(SUM(s.nombre_retrouvees), 0) as total_retrouvees,
         COALESCE(SUM(s.nombre_impliques), 0) as total_impliques,
-        COALESCE(SUM(s.nombre_assistances), 0) as total_assistances
+        COALESCE(SUM(s.nombre_prises_en_compte), 0) as total_prises_en_compte
     FROM operations o
     LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
     WHERE 1=1
         AND (:date_debut IS NULL OR o.date_heure_reception_alerte >= :date_debut)
         AND (:date_fin IS NULL OR o.date_heure_reception_alerte <= :date_fin)
+        {cross_clause}
     """
-    result = execute_raw_sql(sql, {"date_debut": date_debut, "date_fin": date_fin})
+    result = execute_raw_sql(sql, params)
     return result[0] if result else {}
 
 
+@st.cache_data(ttl=3600)
 def get_resultats_humain_stats() -> list[dict]:
     """Statistiques détaillées des résultats humains.
 
@@ -383,6 +618,7 @@ def get_resultats_humain_stats() -> list[dict]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_flotteurs_stats(limit: int = 15) -> list[dict]:
     """Statistiques sur les types de flotteurs.
 
@@ -405,6 +641,7 @@ def get_flotteurs_stats(limit: int = 15) -> list[dict]:
     return execute_raw_sql(sql, {"limit": limit})
 
 
+@st.cache_data(ttl=3600)
 def get_flotteurs_by_pavillon(limit: int = 10) -> list[dict]:
     """Répartition des flotteurs par pavillon.
 
@@ -432,6 +669,7 @@ def get_flotteurs_by_pavillon(limit: int = 10) -> list[dict]:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_top_operations_by_personnes(limit: int = 10) -> list[dict]:
     """Top des opérations avec le plus de personnes impliquées.
 
@@ -449,7 +687,7 @@ def get_top_operations_by_personnes(limit: int = 10) -> list[dict]:
             o.type_operation,
             o."cross",
             COALESCE(s.nombre_impliques, 0) as nombre_impliques,
-            COALESCE(s.nombre_sauves, 0) as nombre_sauves,
+            COALESCE(s.nombre_saines_sauves, 0) as nombre_saines_sauves,
             ROW_NUMBER() OVER (ORDER BY COALESCE(s.nombre_impliques, 0) DESC) as rang
         FROM operations o
         LEFT JOIN operations_stats s ON o.operation_id = s.operation_id
@@ -460,6 +698,7 @@ def get_top_operations_by_personnes(limit: int = 10) -> list[dict]:
     return execute_raw_sql(sql, {"limit": limit})
 
 
+@st.cache_data(ttl=3600)
 def get_operations_with_casualties() -> list[dict]:
     """Opérations avec victimes (décédés ou disparus).
 
@@ -485,6 +724,7 @@ def get_operations_with_casualties() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def search_operations_advanced(
     cross: str = None,
     type_operation: str = None,
@@ -520,7 +760,7 @@ def search_operations_advanced(
         o."cross",
         o.departement,
         COALESCE(s.nombre_impliques, 0) as nombre_impliques,
-        COALESCE(s.nombre_sauves, 0) as nombre_sauves,
+        COALESCE(s.nombre_saines_sauves, 0) as nombre_saines_sauves,
         COALESCE(s.nombre_decedes, 0) as nombre_decedes,
         COALESCE(s.nombre_disparus, 0) as nombre_disparus
     FROM operations o
@@ -559,6 +799,7 @@ def search_operations_advanced(
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def query_to_dataframe(sql: str, params: dict = None) -> pd.DataFrame:
     """Exécuter une requête et retourner un DataFrame.
 
@@ -573,6 +814,7 @@ def query_to_dataframe(sql: str, params: dict = None) -> pd.DataFrame:
     return pd.DataFrame(results) if results else pd.DataFrame()
 
 
+@st.cache_data(ttl=3600)
 def get_operations_dataframe(
     cross: str = None,
     date_debut: date = None,
@@ -601,7 +843,7 @@ def get_operations_dataframe(
         o.latitude,
         o.longitude,
         COALESCE(s.nombre_impliques, 0) as nombre_impliques,
-        COALESCE(s.nombre_sauves, 0) as nombre_sauves,
+        COALESCE(s.nombre_saines_sauves, 0) as nombre_saines_sauves,
         COALESCE(s.nombre_decedes, 0) as nombre_decedes,
         COALESCE(s.nombre_disparus, 0) as nombre_disparus,
         COALESCE(s.nombre_blesses, 0) as nombre_blesses
@@ -630,6 +872,7 @@ def get_operations_dataframe(
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_audit_logs(
     table_name: str = None,
     operation_type: str = None,
@@ -681,6 +924,7 @@ def get_audit_logs(
     )
 
 
+@st.cache_data(ttl=3600)
 def get_audit_stats() -> dict:
     """Statistiques sur l'audit.
 
@@ -708,6 +952,7 @@ def get_audit_stats() -> dict:
 # =============================================================================
 
 
+@st.cache_data(ttl=3600)
 def get_all_tables() -> list[str]:
     """Liste des tables du schema clean.
 
@@ -725,6 +970,7 @@ def get_all_tables() -> list[str]:
     return [r["table_name"] for r in results]
 
 
+@st.cache_data(ttl=3600)
 def get_table_schema(table_name: str) -> list[dict]:
     """Recuperer le schema d'une table depuis information_schema.
 
@@ -750,6 +996,7 @@ def get_table_schema(table_name: str) -> list[dict]:
     return execute_raw_sql(sql, {"table_name": table_name})
 
 
+@st.cache_data(ttl=3600)
 def get_primary_keys() -> list[dict]:
     """Recuperer les cles primaires de toutes les tables.
 
@@ -771,6 +1018,7 @@ def get_primary_keys() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_foreign_keys() -> list[dict]:
     """Recuperer les relations FK pour generer le diagramme ER.
 
@@ -798,6 +1046,7 @@ def get_foreign_keys() -> list[dict]:
     return execute_raw_sql(sql)
 
 
+@st.cache_data(ttl=3600)
 def get_table_indexes(table_name: str = None) -> list[dict]:
     """Recuperer les index d'une table ou de toutes les tables.
 
@@ -820,6 +1069,7 @@ def get_table_indexes(table_name: str = None) -> list[dict]:
     return execute_raw_sql(sql, {"table_name": table_name})
 
 
+@st.cache_data(ttl=3600)
 def get_audited_tables() -> list[str]:
     """Recuperer la liste des tables presentes dans audit_log.
 
@@ -835,6 +1085,7 @@ def get_audited_tables() -> list[str]:
     return [r["table_name"] for r in results] if results else []
 
 
+@st.cache_data(ttl=3600)
 def generate_mermaid_er() -> str:
     """Generer le code Mermaid ER depuis les FK de la base.
 

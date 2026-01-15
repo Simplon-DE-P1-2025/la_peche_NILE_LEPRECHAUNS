@@ -1,24 +1,26 @@
 """Dashboard analytique - Statistiques des operations SECMAR.
 
 Cette page affiche:
-- KPIs principaux (total operations, CROSS, personnes, duree moyenne)
+- KPIs principaux avec sparklines et indicateurs YoY
+- Taux de sauvetage (Gauge) et Lives Saved
 - Graphiques de repartition par CROSS et par type d'operation
 - Evolution temporelle des operations
 - Bilan humain global et par CROSS
-- Statistiques annuelles
+- Statistiques annuelles avec tendances
 - Carte des operations (si coordonnees disponibles)
 
-L'approche utilise des requetes Raw SQL pour de meilleures performances
-sur les agregations complexes.
+L'approche utilise des requetes Raw SQL et les vues KPI pour de meilleures
+performances sur les agregations complexes.
 
-Auteur: Equipe Sprint 3-4
 Date: Janvier 2026
+Version: 2.0 - Enrichi avec KPIs avancés
 """
+
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import sys
 from pathlib import Path
 
@@ -39,17 +41,28 @@ from src.database.raw_queries import (
     get_operations_dataframe,
     get_cross_list,
     get_yearly_stats,
+    get_nb_cross,
 )
+
+# Import des KPIs avancés
+try:
+    from src.database.kpi_queries import (
+        get_kpi_securite_global,
+        get_kpi_lives_saved,
+        get_kpi_yoy_latest,
+        get_kpi_alertes_actives,
+        get_kpi_securite_mensuel,
+    )
+
+    KPI_ADVANCED_AVAILABLE = True
+except ImportError:
+    KPI_ADVANCED_AVAILABLE = False
 
 
 # =============================================================================
 # Configuration de la page Streamlit
 # =============================================================================
-st.set_page_config(
-    page_title="Dashboard SECMAR",
-    page_icon="📊",
-    layout="wide"
-)
+st.set_page_config(page_title="Dashboard SECMAR", page_icon="📊", layout="wide")
 
 
 # =============================================================================
@@ -73,25 +86,27 @@ st.caption("Statistiques des operations de sauvetage maritime")
 with st.sidebar:
     st.subheader("🔍 Filtres")
 
-    # Période
+    # Période (par défaut: 12 derniers mois pour performance)
+    default_date_debut = date.today() - timedelta(days=365)
+    default_date_fin = date.today()
+
     col1, col2 = st.columns(2)
     with col1:
-        date_debut = st.date_input(
-            "Date début",
-            value=None,
-            key="dash_date_debut"
-        )
+        date_debut = st.date_input("Date début", value=default_date_debut, key="dash_date_debut")
     with col2:
-        date_fin = st.date_input(
-            "Date fin",
-            value=None,
-            key="dash_date_fin"
-        )
+        date_fin = st.date_input("Date fin", value=default_date_fin, key="dash_date_fin")
 
     # CROSS
     cross_list = ["Tous"] + get_cross_list()
     selected_cross = st.selectbox("CROSS", options=cross_list, index=0)
     filter_cross = None if selected_cross == "Tous" else selected_cross
+
+    # Toggle CROSS historiques
+    inclure_cross_historiques = st.toggle(
+        "Inclure CROSS historiques",
+        value=False,
+        help="Inclure les CROSS fermés (Adge, Guyane, La Réunion, Martinique, etc.)",
+    )
 
     # Granularité
     granularity = st.selectbox(
@@ -102,53 +117,169 @@ with st.sidebar:
             "day": "Jour",
             "week": "Semaine",
             "month": "Mois",
-            "year": "Année"
-        }[x]
+            "year": "Année",
+        }[x],
     )
 
 # =============================================================================
-# Section: KPIs principaux
+# Section: KPIs principaux (enrichis)
 # =============================================================================
 st.subheader("📈 Indicateurs cles")
 
-kpis_global = get_kpis()
-kpis_periode = get_kpis_by_period(date_debut, date_fin)
+# Filtrage par CROSS actifs selon le toggle
+cross_actifs_only = not inclure_cross_historiques
+kpis_global = get_kpis(cross_actifs_seulement=cross_actifs_only)
+kpis_periode = get_kpis_by_period(date_debut, date_fin, cross_actifs_seulement=cross_actifs_only)
 
+# Récupération des KPIs avancés si disponibles
+kpi_securite = {}
+kpi_yoy = {}
+if KPI_ADVANCED_AVAILABLE:
+    try:
+        kpi_securite = get_kpi_securite_global(date_debut, date_fin, cross_actifs_seulement=cross_actifs_only) or {}
+        kpi_yoy = get_kpi_yoy_latest(cross_actifs_seulement=cross_actifs_only) or {}
+    except Exception:
+        pass
+
+# Ligne 1: KPIs principaux avec variations YoY
 col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
+    total_ops = kpis_global.get("total_operations", 0)
+    yoy_ops = kpi_yoy.get("yoy_operations_pct")
+    delta_ops = f"{yoy_ops:+.1f}% YoY" if yoy_ops is not None else None
     st.metric(
         "Total opérations",
-        f"{kpis_global.get('total_operations', 0):,}".replace(",", " "),
-        help="Nombre total d'opérations enregistrées"
+        f"{total_ops:,}".replace(",", " "),
+        delta=delta_ops,
+        help="Nombre total d'opérations enregistrées",
     )
 
 with col2:
+    ops_periode = kpis_periode.get("total_operations", 0)
     st.metric(
         "Période sélectionnée",
-        f"{kpis_periode.get('total_operations', 0):,}".replace(",", " "),
-        help=f"Du {date_debut} au {date_fin}"
+        f"{ops_periode:,}".replace(",", " "),
+        help=f"Du {date_debut} au {date_fin}",
     )
-
 with col3:
-    st.metric(
-        "CROSS actifs",
-        kpis_global.get('nb_cross', 0),
-        help="Centres Régionaux Opérationnels"
+    nb_cross = get_nb_cross(actifs_seulement=not inclure_cross_historiques)
+    label_cross = "CROSS (tous)" if inclure_cross_historiques else "CROSS actifs"
+    help_cross = (
+        "Tous les CROSS (incluant historiques)"
+        if inclure_cross_historiques
+        else "CROSS actuellement en activité"
     )
+    st.metric(label_cross, nb_cross, help=help_cross)
 
 with col4:
+    total_personnes = kpis_global.get("total_personnes", 0)
+    yoy_personnes = kpi_yoy.get("yoy_personnes_pct")
+    delta_pers = f"{yoy_personnes:+.1f}% YoY" if yoy_personnes is not None else None
     st.metric(
         "Personnes impliquées",
-        f"{kpis_global.get('total_personnes', 0):,}".replace(",", " ")
+        f"{total_personnes:,}".replace(",", " "),
+        delta=delta_pers,
     )
 
 with col5:
-    duree = kpis_global.get('duree_moyenne', 0) or 0
-    st.metric(
-        "Durée moyenne",
-        f"{duree:.0f} min"
-    )
+    duree = kpis_global.get("duree_moyenne", 0) or 0
+    st.metric("Durée moyenne", f"{duree:.0f} min")
+
+# Ligne 2: KPIs de sécurité (si disponibles)
+if KPI_ADVANCED_AVAILABLE and kpi_securite:
+    st.markdown("---")
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        taux_sauv = kpi_securite.get("taux_saines_sauves", 0) or 0
+        # Couleur selon le taux (objectif officiel SECMAR: >98%)
+        if taux_sauv >= 98:
+            color = "🟢"
+        elif taux_sauv >= 95:
+            color = "🟡"
+        else:
+            color = "🔴"
+        st.metric(
+            f"{color} Taux saines et sauves",
+            f"{taux_sauv:.1f}%",
+            help="KPI officiel SECMAR - Personnes mises hors de danger / Prises en compte (Objectif: >98%)",
+        )
+
+    with col2:
+        lives_saved = kpi_securite.get("total_saines_sauves", 0) or 0
+        yoy_sauves = kpi_yoy.get("yoy_sauves_pct")
+        delta_sauves = f"{yoy_sauves:+.1f}% YoY" if yoy_sauves is not None else None
+        st.metric(
+            "🏆 Saines et Sauves",
+            f"{lives_saved:,}".replace(",", " "),
+            delta=delta_sauves,
+            help="Personnes secourues + assistées + retrouvées (définition SECMAR)",
+        )
+
+    with col3:
+        taux_mort = kpi_securite.get("taux_mortalite", 0) or 0
+        # Couleur inversée (plus bas = mieux)
+        if taux_mort <= 1:
+            color = "🟢"
+        elif taux_mort <= 3:
+            color = "🟡"
+        else:
+            color = "🔴"
+        st.metric(
+            f"{color} Taux mortalité",
+            f"{taux_mort:.2f}%",
+            help="Décédés / Personnes impliquées (Objectif: <1%)",
+        )
+
+    with col4:
+        indice_grav = kpi_securite.get("indice_gravite", 0) or 0
+        # Indice de gravité (0 = parfait)
+        if indice_grav <= 0.05:
+            color = "🟢"
+        elif indice_grav <= 0.1:
+            color = "🟡"
+        else:
+            color = "🔴"
+        st.metric(
+            f"{color} Indice gravité",
+            f"{indice_grav:.3f}",
+            help="(Décédés×3 + Disparus×2 + Blessés) / Impliqués",
+        )
+
+    # Gauge du taux de sauvetage
+    with st.expander("📊 Jauge Taux de Sauvetage", expanded=False):
+        fig_gauge = go.Figure(
+            go.Indicator(
+                mode="gauge+number+delta",
+                value=taux_sauv,
+                domain={"x": [0, 1], "y": [0, 1]},
+                title={"text": "Taux de Sauvetage (%)"},
+                delta={"reference": 95, "position": "bottom"},
+                gauge={
+                    "axis": {"range": [0, 100], "tickwidth": 1},
+                    "bar": {
+                        "color": (
+                            "#2ecc71"
+                            if taux_sauv >= 95
+                            else "#f39c12" if taux_sauv >= 90 else "#e74c3c"
+                        )
+                    },
+                    "steps": [
+                        {"range": [0, 90], "color": "#ffcccc"},
+                        {"range": [90, 95], "color": "#fff3cd"},
+                        {"range": [95, 100], "color": "#d4edda"},
+                    ],
+                    "threshold": {
+                        "line": {"color": "green", "width": 4},
+                        "thickness": 0.75,
+                        "value": 95,
+                    },
+                },
+            )
+        )
+        fig_gauge.update_layout(height=250)
+        st.plotly_chart(fig_gauge, use_container_width=True)
 
 st.divider()
 
@@ -160,7 +291,7 @@ col_left, col_right = st.columns(2)
 with col_left:
     st.subheader("🏢 Opérations par CROSS")
 
-    data_cross = get_operations_by_cross()
+    data_cross = get_operations_by_cross(cross_actifs_seulement=cross_actifs_only)
     if data_cross:
         df_cross = pd.DataFrame(data_cross)
 
@@ -173,15 +304,11 @@ with col_left:
             labels={
                 "cross": "CROSS",
                 "total_operations": "Opérations",
-                "total_personnes": "Personnes"
+                "total_personnes": "Personnes",
             },
-            title=""
+            title="",
         )
-        fig.update_layout(
-            height=400,
-            xaxis_tickangle=-45,
-            showlegend=False
-        )
+        fig.update_layout(height=400, xaxis_tickangle=-45, showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Pas de données disponibles")
@@ -189,7 +316,7 @@ with col_left:
 with col_right:
     st.subheader("📋 Répartition par type")
 
-    data_type = get_operations_by_type()
+    data_type = get_operations_by_type(cross_actifs_seulement=cross_actifs_only)
     if data_type:
         df_type = pd.DataFrame(data_type)
 
@@ -199,11 +326,14 @@ with col_right:
             names="type_operation",
             hole=0.4,
             color_discrete_sequence=px.colors.qualitative.Set2,
-            title=""
+            title="",
         )
         fig.update_layout(height=400)
-        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig, use_container_width=True)
+
+        # Legende types d'operation
+        st.caption("**Legende :** SAR = Vie humaine en danger | MAS = Assistance navires | SUR = Surete | POL = Pollution | DIV = Autres")
     else:
         st.info("Pas de données disponibles")
 
@@ -212,39 +342,43 @@ with col_right:
 # =============================================================================
 st.subheader("📅 Evolution dans le temps")
 
-data_timeline = get_operations_timeline(granularity, date_debut, date_fin)
+data_timeline = get_operations_timeline(granularity, date_debut, date_fin, cross_actifs_seulement=cross_actifs_only)
 
 if data_timeline:
     df_timeline = pd.DataFrame(data_timeline)
-    df_timeline['periode'] = pd.to_datetime(df_timeline['periode'], utc=True)
+    df_timeline["periode"] = pd.to_datetime(df_timeline["periode"], utc=True)
 
     fig = go.Figure()
 
     # Ligne pour les opérations
-    fig.add_trace(go.Scatter(
-        x=df_timeline['periode'],
-        y=df_timeline['total_operations'],
-        mode='lines+markers',
-        name='Opérations',
-        line=dict(color='#1f77b4', width=2),
-        marker=dict(size=6)
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=df_timeline["periode"],
+            y=df_timeline["total_operations"],
+            mode="lines+markers",
+            name="Opérations",
+            line=dict(color="#1f77b4", width=2),
+            marker=dict(size=6),
+        )
+    )
 
     # Barres pour les personnes (axe secondaire)
-    fig.add_trace(go.Bar(
-        x=df_timeline['periode'],
-        y=df_timeline['total_personnes'],
-        name='Personnes impliquées',
-        marker_color='rgba(255, 127, 14, 0.5)',
-        yaxis='y2'
-    ))
+    fig.add_trace(
+        go.Bar(
+            x=df_timeline["periode"],
+            y=df_timeline["total_personnes"],
+            name="Personnes impliquées",
+            marker_color="rgba(255, 127, 14, 0.5)",
+            yaxis="y2",
+        )
+    )
 
     fig.update_layout(
         height=400,
-        yaxis=dict(title="Nombre d'opérations", side='left'),
-        yaxis2=dict(title="Personnes impliquées", overlaying='y', side='right'),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
-        hovermode='x unified'
+        yaxis=dict(title="Nombre d'opérations", side="left"),
+        yaxis2=dict(title="Personnes impliquées", overlaying="y", side="right"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        hovermode="x unified",
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -259,45 +393,52 @@ st.subheader("👥 Bilan humain")
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    bilan = get_bilan_by_period(date_debut, date_fin)
+    bilan = get_bilan_by_period(date_debut, date_fin, cross_actifs_seulement=cross_actifs_only)
     if bilan:
         st.markdown("#### Totaux globaux")
 
         # Métriques avec couleurs
-        st.markdown(f"""
+        st.markdown(
+            f"""
         | Résultat | Nombre |
         |----------|--------|
-        | 🟢 Sauvés | **{bilan.get('total_sauves', 0):,}** |
-        | 🟡 Assistances | **{bilan.get('total_assistances', 0):,}** |
+        | 🟢 Saines et Sauves | **{bilan.get('total_saines_sauves', 0):,}** |
+        | └ Secourues | *{bilan.get('total_secourues', 0):,}* |
+        | └ Assistées | *{bilan.get('total_assistees', 0):,}* |
+        | └ Retrouvées | *{bilan.get('total_retrouvees', 0):,}* |
         | 🟠 Blessés | **{bilan.get('total_blesses', 0):,}** |
         | 🔴 Décédés | **{bilan.get('total_decedes', 0):,}** |
         | ⚫ Disparus | **{bilan.get('total_disparus', 0):,}** |
-        """.replace(",", " "))
+        """.replace(
+                ",", " "
+            )
+        )
     else:
         st.info("Pas de données disponibles")
 
 with col2:
-    bilan_cross = get_bilan_by_cross_filtered(date_debut, date_fin)
+    bilan_cross = get_bilan_by_cross_filtered(date_debut, date_fin, cross_actifs_seulement=cross_actifs_only)
     if bilan_cross:
         df_bilan = pd.DataFrame(bilan_cross)
 
         fig = px.bar(
             df_bilan,
             x="cross",
-            y=["sauves", "blesses", "decedes", "disparus"],
+            y=["saines_sauves", "blesses", "decedes", "disparus"],
             barmode="stack",
             color_discrete_map={
-                "sauves": "#2ecc71",
+                "saines_sauves": "#2ecc71",
                 "blesses": "#f39c12",
                 "decedes": "#e74c3c",
-                "disparus": "#34495e"
+                "disparus": "#34495e",
             },
             labels={
                 "value": "Nombre",
                 "variable": "Résultat",
-                "cross": "CROSS"
+                "cross": "CROSS",
+                "saines_sauves": "Saines et Sauves",
             },
-            title="Bilan par CROSS"
+            title="Bilan par CROSS",
         )
         fig.update_layout(height=400, xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
@@ -309,7 +450,7 @@ with col2:
 # =============================================================================
 st.subheader("📆 Statistiques par annee")
 
-yearly_stats = get_yearly_stats()
+yearly_stats = get_yearly_stats(cross_actifs_seulement=cross_actifs_only)
 if yearly_stats:
     df_yearly = pd.DataFrame(yearly_stats)
 
@@ -321,7 +462,7 @@ if yearly_stats:
             x="annee",
             y="total_operations",
             markers=True,
-            title="Évolution du nombre d'opérations"
+            title="Évolution du nombre d'opérations",
         )
         fig.update_layout(height=300)
         st.plotly_chart(fig, use_container_width=True)
@@ -331,7 +472,7 @@ if yearly_stats:
             df_yearly,
             x="annee",
             y="total_personnes",
-            title="Personnes impliquées par année"
+            title="Personnes impliquées par année",
         )
         fig.update_layout(height=300)
         st.plotly_chart(fig, use_container_width=True)
@@ -342,18 +483,15 @@ if yearly_stats:
 st.subheader("🗺️ Carte des operations")
 
 df_map = get_operations_dataframe(
-    cross=filter_cross,
-    date_debut=date_debut,
-    date_fin=date_fin,
-    limit=1000
+    cross=filter_cross, date_debut=date_debut, date_fin=date_fin, limit=1000
 )
 
-if not df_map.empty and 'latitude' in df_map.columns and 'longitude' in df_map.columns:
+if not df_map.empty and "latitude" in df_map.columns and "longitude" in df_map.columns:
     # Filtrer les coordonnées valides
-    df_map_valid = df_map.dropna(subset=['latitude', 'longitude'])
+    df_map_valid = df_map.dropna(subset=["latitude", "longitude"])
     df_map_valid = df_map_valid[
-        (df_map_valid['latitude'].between(-90, 90)) &
-        (df_map_valid['longitude'].between(-180, 180))
+        (df_map_valid["latitude"].between(-90, 90))
+        & (df_map_valid["longitude"].between(-180, 180))
     ]
 
     if not df_map_valid.empty:
@@ -363,11 +501,18 @@ if not df_map.empty and 'latitude' in df_map.columns and 'longitude' in df_map.c
             lon="longitude",
             color="type_operation",
             size="nombre_impliques",
-            hover_data=["date_heure_reception_alerte", "cross", "nombre_sauves"],
+            hover_data=["date_heure_reception_alerte", "cross", "nombre_saines_sauves"],
             zoom=5,
             center={"lat": 46.5, "lon": -1.5},
             mapbox_style="open-street-map",
-            title=""
+            title="",
+            color_discrete_sequence=[
+                "#e63946",
+                "#f4a261",
+                "#2a9d8f",
+                "#9b59b6",
+                "#1d3557",
+            ],
         )
         fig.update_layout(height=500)
         st.plotly_chart(fig, use_container_width=True)
@@ -386,7 +531,7 @@ with st.expander("📥 Exporter les donnees"):
             label="Télécharger en CSV",
             data=csv,
             file_name=f"secmar_operations_{date_debut}_{date_fin}.csv",
-            mime="text/csv"
+            mime="text/csv",
         )
     else:
         st.info("Pas de données à exporter")

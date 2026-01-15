@@ -9,7 +9,7 @@ from decimal import Decimal
 from sqlalchemy import Column, String, Integer, DateTime, Float, ForeignKey, Text, Boolean, Date, Time, TIMESTAMP, DECIMAL, ARRAY
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from .connection import Base
+from src.database.connection import Base
 
 
 class Operation(Base):

@@ -5,7 +5,6 @@ Cette page affiche:
 - Dictionnaire des champs avec types, descriptions SECMAR et contraintes
 - Valeurs des enumerations
 
-Auteur: Equipe Sprint 3-4
 Date: Janvier 2026
 """
 
@@ -133,14 +132,16 @@ def build_dictionary_dataframe(schema: EntitySchema) -> pd.DataFrame:
             else:
                 enum_preview = ", ".join(values)
 
-        data.append({
-            "Champ": meta["Champ"],
-            "Label": meta["Label"],
-            "Type": meta["Type"],
-            "Description": meta["Description"],
-            "Contraintes": meta["Contraintes"],
-            "Valeurs enum": enum_preview,
-        })
+        data.append(
+            {
+                "Champ": meta["Champ"],
+                "Label": meta["Label"],
+                "Type": meta["Type"],
+                "Description": meta["Description"],
+                "Contraintes": meta["Contraintes"],
+                "Valeurs enum": enum_preview,
+            }
+        )
 
     return pd.DataFrame(data)
 
@@ -158,122 +159,159 @@ st.caption("Dictionnaire de donnees SECMAR - Descriptions officielles")
 
 
 # =============================================================================
-# Section: Metriques globales
+# Layout principal avec sidebar de references
 # =============================================================================
-st.subheader("Vue d'ensemble")
+col_main, col_sidebar = st.columns([3, 1])
 
-col1, col2, col3 = st.columns(3)
+# -----------------------------------------------------------------------------
+# Sidebar: References metier
+# -----------------------------------------------------------------------------
+with col_sidebar:
+    st.markdown("### 📖 References")
 
-try:
-    with get_session() as session:
-        with col1:
-            count_ops = crud_operation.count(session)
-            st.metric("Operations", f"{count_ops:,}".replace(",", " "))
-        with col2:
-            count_flot = crud_flotteur.count(session)
-            st.metric("Flotteurs", f"{count_flot:,}".replace(",", " "))
-        with col3:
-            count_res = crud_resultat_humain.count(session)
-            st.metric("Resultats Humains", f"{count_res:,}".replace(",", " "))
-except Exception as e:
-    st.warning(f"Impossible de charger les statistiques: {e}")
+    # Expander Types d'operation CROSS
+    with st.expander("🎯 Types d'operation", expanded=False):
+        for code, info in enums.TYPE_OPERATION_DETAILS.items():
+            st.markdown(f"**{info['emoji']} {code}** - {info['nom']}")
+            st.caption(info['description'])
 
-st.divider()
+    # Expander Echelle Douglas (mer)
+    with st.expander("🌊 Echelle Douglas (mer)", expanded=False):
+        df_douglas = pd.DataFrame(enums.ECHELLE_DOUGLAS)
+        df_douglas.columns = ["Etat", "Description", "Hauteur"]
+        st.dataframe(df_douglas, hide_index=True, use_container_width=True)
 
-
-# =============================================================================
-# Section: Dictionnaire par entite (Tabs)
-# =============================================================================
-tab_op, tab_flot, tab_res = st.tabs([
-    "🚢 Operations",
-    "⛵ Flotteurs",
-    "👥 Resultats Humains",
-])
+    # Expander Echelle Beaufort (vent)
+    with st.expander("💨 Echelle Beaufort (vent)", expanded=False):
+        df_beaufort = pd.DataFrame(enums.ECHELLE_BEAUFORT)
+        df_beaufort.columns = ["Force", "Description", "Vent (km/h)"]
+        st.dataframe(df_beaufort, hide_index=True, use_container_width=True)
 
 
 # -----------------------------------------------------------------------------
-# Tab: Operations
+# Contenu principal
 # -----------------------------------------------------------------------------
-with tab_op:
-    st.markdown(f"### {OPERATION_SCHEMA.display_name}")
-    st.info(f"Entite principale - {len(OPERATION_SCHEMA.fields)} champs")
+with col_main:
+    # =========================================================================
+    # Section: Metriques globales
+    # =========================================================================
+    st.subheader("Vue d'ensemble")
 
-    # Tableau du dictionnaire
-    df_op = build_dictionary_dataframe(OPERATION_SCHEMA)
-    st.dataframe(df_op, use_container_width=True, hide_index=True, height=400)
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
 
-    # Expander pour les valeurs d'enumeration
-    enum_fields_op = get_enum_fields(OPERATION_SCHEMA)
-    if enum_fields_op:
-        with st.expander("📋 Valeurs des enumerations", expanded=False):
-            for field in enum_fields_op:
-                values = getattr(enums, field.enum_ref, [])
-                st.markdown(f"**{field.label}** (`{field.enum_ref}`)")
-                # Afficher en colonnes si beaucoup de valeurs
-                if len(values) > 10:
-                    cols = st.columns(3)
-                    for i, val in enumerate(values):
-                        cols[i % 3].write(f"- {val}")
-                else:
+    try:
+        with get_session() as session:
+            with metric_col1:
+                count_ops = crud_operation.count(session)
+                st.metric("Operations", f"{count_ops:,}".replace(",", " "))
+            with metric_col2:
+                count_flot = crud_flotteur.count(session)
+                st.metric("Flotteurs", f"{count_flot:,}".replace(",", " "))
+            with metric_col3:
+                count_res = crud_resultat_humain.count(session)
+                st.metric("Resultats Humains", f"{count_res:,}".replace(",", " "))
+    except Exception as e:
+        st.warning(f"Impossible de charger les statistiques: {e}")
+
+    st.divider()
+
+    # =========================================================================
+    # Section: Dictionnaire par entite (Tabs)
+    # =========================================================================
+    tab_op, tab_flot, tab_res = st.tabs(
+        [
+            "🚢 Operations",
+            "⛵ Flotteurs",
+            "👥 Resultats Humains",
+        ]
+    )
+
+    # -------------------------------------------------------------------------
+    # Tab: Operations
+    # -------------------------------------------------------------------------
+    with tab_op:
+        st.markdown(f"### {OPERATION_SCHEMA.display_name}")
+        st.info(f"Entite principale - {len(OPERATION_SCHEMA.fields)} champs")
+
+        # Tableau du dictionnaire
+        df_op = build_dictionary_dataframe(OPERATION_SCHEMA)
+        st.dataframe(df_op, use_container_width=True, hide_index=True, height=400)
+
+        # Expander pour les valeurs d'enumeration
+        enum_fields_op = get_enum_fields(OPERATION_SCHEMA)
+        if enum_fields_op:
+            with st.expander("📋 Valeurs des enumerations", expanded=False):
+                for field in enum_fields_op:
+                    values = getattr(enums, field.enum_ref, [])
+                    st.markdown(f"**{field.label}** (`{field.enum_ref}`)")
+                    # Afficher en colonnes si beaucoup de valeurs
+                    if len(values) > 10:
+                        enum_cols = st.columns(3)
+                        for i, val in enumerate(values):
+                            enum_cols[i % 3].write(f"- {val}")
+                    else:
+                        st.write(", ".join(values))
+                    st.markdown("---")
+
+    # -------------------------------------------------------------------------
+    # Tab: Flotteurs
+    # -------------------------------------------------------------------------
+    with tab_flot:
+        st.markdown(f"### {FLOTTEUR_SCHEMA.display_name}")
+        st.info(
+            f"Entite enfant - {len(FLOTTEUR_SCHEMA.fields)} champs | Relation 1:N avec Operation"
+        )
+
+        # Tableau du dictionnaire
+        df_flot = build_dictionary_dataframe(FLOTTEUR_SCHEMA)
+        st.dataframe(df_flot, use_container_width=True, hide_index=True)
+
+        # Expander pour les valeurs d'enumeration
+        enum_fields_flot = get_enum_fields(FLOTTEUR_SCHEMA)
+        if enum_fields_flot:
+            with st.expander("📋 Valeurs des enumerations", expanded=False):
+                for field in enum_fields_flot:
+                    values = getattr(enums, field.enum_ref, [])
+                    st.markdown(f"**{field.label}** (`{field.enum_ref}`)")
                     st.write(", ".join(values))
-                st.markdown("---")
+                    st.markdown("---")
 
+    # -------------------------------------------------------------------------
+    # Tab: Resultats Humains
+    # -------------------------------------------------------------------------
+    with tab_res:
+        st.markdown(f"### {RESULTAT_HUMAIN_SCHEMA.display_name}")
+        st.info(
+            f"Entite enfant - {len(RESULTAT_HUMAIN_SCHEMA.fields)} champs | Relation 1:N avec Operation"
+        )
 
-# -----------------------------------------------------------------------------
-# Tab: Flotteurs
-# -----------------------------------------------------------------------------
-with tab_flot:
-    st.markdown(f"### {FLOTTEUR_SCHEMA.display_name}")
-    st.info(f"Entite enfant - {len(FLOTTEUR_SCHEMA.fields)} champs | Relation 1:N avec Operation")
+        # Tableau du dictionnaire
+        df_res = build_dictionary_dataframe(RESULTAT_HUMAIN_SCHEMA)
+        st.dataframe(df_res, use_container_width=True, hide_index=True)
 
-    # Tableau du dictionnaire
-    df_flot = build_dictionary_dataframe(FLOTTEUR_SCHEMA)
-    st.dataframe(df_flot, use_container_width=True, hide_index=True)
+        # Expander pour les valeurs d'enumeration
+        enum_fields_res = get_enum_fields(RESULTAT_HUMAIN_SCHEMA)
+        if enum_fields_res:
+            with st.expander("📋 Valeurs des enumerations", expanded=False):
+                for field in enum_fields_res:
+                    values = getattr(enums, field.enum_ref, [])
+                    st.markdown(f"**{field.label}** (`{field.enum_ref}`)")
+                    st.write(", ".join(values))
+                    st.markdown("---")
 
-    # Expander pour les valeurs d'enumeration
-    enum_fields_flot = get_enum_fields(FLOTTEUR_SCHEMA)
-    if enum_fields_flot:
-        with st.expander("📋 Valeurs des enumerations", expanded=False):
-            for field in enum_fields_flot:
-                values = getattr(enums, field.enum_ref, [])
-                st.markdown(f"**{field.label}** (`{field.enum_ref}`)")
-                st.write(", ".join(values))
-                st.markdown("---")
+    # =========================================================================
+    # Section: Source des donnees
+    # =========================================================================
+    st.divider()
+    st.subheader("📖 Source des donnees")
 
-
-# -----------------------------------------------------------------------------
-# Tab: Resultats Humains
-# -----------------------------------------------------------------------------
-with tab_res:
-    st.markdown(f"### {RESULTAT_HUMAIN_SCHEMA.display_name}")
-    st.info(f"Entite enfant - {len(RESULTAT_HUMAIN_SCHEMA.fields)} champs | Relation 1:N avec Operation")
-
-    # Tableau du dictionnaire
-    df_res = build_dictionary_dataframe(RESULTAT_HUMAIN_SCHEMA)
-    st.dataframe(df_res, use_container_width=True, hide_index=True)
-
-    # Expander pour les valeurs d'enumeration
-    enum_fields_res = get_enum_fields(RESULTAT_HUMAIN_SCHEMA)
-    if enum_fields_res:
-        with st.expander("📋 Valeurs des enumerations", expanded=False):
-            for field in enum_fields_res:
-                values = getattr(enums, field.enum_ref, [])
-                st.markdown(f"**{field.label}** (`{field.enum_ref}`)")
-                st.write(", ".join(values))
-                st.markdown("---")
-
-
-# =============================================================================
-# Section: Source des donnees
-# =============================================================================
-st.divider()
-st.subheader("📖 Source des donnees")
-
-st.markdown("""
+    st.markdown(
+        """
 Les descriptions des champs proviennent de la documentation officielle SECMAR :
 - [Schema SECMAR](https://mtes-mct.github.io/secmar-documentation/schema.html)
 - [Tables de codes](https://mtes-mct.github.io/secmar-documentation/tables_codes.html)
 
 Les valeurs des enumerations incluent les valeurs historiques (avant 2020) pour
 compatibilite avec les donnees legacy.
-""")
+"""
+    )

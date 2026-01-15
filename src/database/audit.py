@@ -1,7 +1,7 @@
 """
 audit.py - Tracer les modifications dans la base de données
 """
-from .models import AuditLog
+from src.database.models import AuditLog
 from datetime import datetime
 
 
