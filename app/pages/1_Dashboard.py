@@ -20,7 +20,7 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import sys
 from pathlib import Path
 
@@ -86,12 +86,15 @@ st.caption("Statistiques des operations de sauvetage maritime")
 with st.sidebar:
     st.subheader("🔍 Filtres")
 
-    # Période
+    # Période (par défaut: 12 derniers mois pour performance)
+    default_date_debut = date.today() - timedelta(days=365)
+    default_date_fin = date.today()
+
     col1, col2 = st.columns(2)
     with col1:
-        date_debut = st.date_input("Date début", value=None, key="dash_date_debut")
+        date_debut = st.date_input("Date début", value=default_date_debut, key="dash_date_debut")
     with col2:
-        date_fin = st.date_input("Date fin", value=None, key="dash_date_fin")
+        date_fin = st.date_input("Date fin", value=default_date_fin, key="dash_date_fin")
 
     # CROSS
     cross_list = ["Tous"] + get_cross_list()

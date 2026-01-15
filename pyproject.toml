@@ -17,6 +17,7 @@ dependencies = [
     "streamlit-authenticator>=0.3.0",
     "plotly>=5.18.0",
     "streamlit-mermaid>=0.3.0",
+    "bcrypt>=4.2.0",
 ]
 [tool.setuptools]
 packages = []

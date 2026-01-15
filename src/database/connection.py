@@ -63,7 +63,7 @@ from sqlalchemy import create_engine, text, MetaData
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 
-from config import DATABASE_URL, DB_SCHEMA, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
+from src.config import DATABASE_URL, DB_SCHEMA, DB_ECHO, DB_POOL_SIZE, DB_MAX_OVERFLOW
 
 # Base class for all SQLAlchemy models - utilise le schéma configuré (clean par défaut)
 Base = declarative_base(metadata=MetaData(schema=DB_SCHEMA))

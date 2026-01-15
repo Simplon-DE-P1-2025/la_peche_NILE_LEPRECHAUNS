@@ -621,6 +621,21 @@ ORDER BY nb_operations DESC;
 -- =============================================================================
 -- Index pour performances des vues
 -- =============================================================================
+
+-- INDEX CRITIQUES pour les jointures FK (impact majeur sur performance)
+-- Note: operations_stats est une VIEW, pas une table - l'index est sur resultats_humain
+CREATE INDEX IF NOT EXISTS idx_resultats_humain_operation_id ON resultats_humain(operation_id);
+CREATE INDEX IF NOT EXISTS idx_flotteurs_operation_id ON flotteurs(operation_id);
+
+-- INDEX pour les colonnes fréquemment filtrées/triées
+CREATE INDEX IF NOT EXISTS idx_operations_date_reception ON operations(date_heure_reception_alerte);
+CREATE INDEX IF NOT EXISTS idx_operations_cross ON operations("cross");
+CREATE INDEX IF NOT EXISTS idx_operations_type ON operations(type_operation);
+
+-- INDEX composite pour les requêtes filtrées par CROSS + date
+CREATE INDEX IF NOT EXISTS idx_operations_cross_date ON operations("cross", date_heure_reception_alerte);
+
+-- INDEX existants (pour dimensions d'analyse)
 CREATE INDEX IF NOT EXISTS idx_operations_phase_journee ON operations(phase_journee);
 CREATE INDEX IF NOT EXISTS idx_operations_jour_ferie ON operations(est_jour_ferie);
 CREATE INDEX IF NOT EXISTS idx_operations_vacances ON operations(est_vacances_scolaires);

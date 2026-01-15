@@ -66,6 +66,7 @@ def verify_password(password: str, hashed: str) -> bool:
 # =============================================================================
 
 
+@st.cache_data(ttl=300)  # Cache 5 minutes pour les données utilisateurs
 def get_users_config() -> dict:
     """Récupérer la configuration des utilisateurs depuis la BDD.
 
@@ -110,6 +111,7 @@ def create_authenticator():
 # =============================================================================
 
 
+@st.cache_data(ttl=300)  # Cache 5 minutes pour les rôles
 def get_user_role(username: str) -> str:
     """Récupérer le rôle d'un utilisateur.
 
