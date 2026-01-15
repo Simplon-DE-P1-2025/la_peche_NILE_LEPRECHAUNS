@@ -55,14 +55,15 @@ Voir [docs/INDEX.md](docs/INDEX.md) pour la documentation complete.
 ## Structure
 
 ```
-├── app/                # Application Streamlit (10 pages)
+├── app/                # Application Streamlit (11 pages)
 ├── src/                # Code metier
 │   ├── database/       # ORM SQLAlchemy, CRUD
 │   ├── auth/           # Authentification
 │   ├── schema/         # Generation de formulaires
 │   ├── validation/     # Validation Pandera
 │   ├── etl/            # Pipeline ETL
-│   └── analytics/      # Requetes analytiques
+│   ├── analytics/      # Requetes analytiques
+│   └── utils/          # Utilitaires (performance, filtres)
 ├── sql/                # Scripts SQL
 ├── config/             # Configuration YAML
 ├── data/               # Donnees (raw/processed)

@@ -16,6 +16,7 @@ Ce module contient toute la logique metier separee de l'interface utilisateur : 
 | [validation/](validation/README.md) | Validation des donnees (Pandera) |
 | [etl/](etl/README.md) | Pipeline ETL (Extract, Transform, Load) |
 | [analytics/](analytics/README.md) | Requetes analytiques pour les dashboards |
+| [utils/](utils/README.md) | Utilitaires (performance, filtres DataFrame, warmload) |
 
 ## Fichiers principaux
 
@@ -35,7 +36,8 @@ src/
 ├── schema/              # Formulaires
 ├── validation/          # Validation
 ├── etl/                 # Pipeline
-└── analytics/           # Requetes
+├── analytics/           # Requetes
+└── utils/               # Utilitaires
 ```
 
 ## Dependances principales
