@@ -8,7 +8,7 @@
 
 ---
 
-## 📋 Sommaire
+##  Sommaire
 
 - [Contexte du Projet](#-contexte-du-projet)
 - [Objectifs et Livrables](#-objectifs-et-livrables)
@@ -23,11 +23,11 @@
 
 ---
 
-## 🎯 Contexte du Projet
+##  Contexte du Projet
 
 ### La mission
 
-En tant que **Data Engineer junior** au sein du département de suivi des opérations de surveillance et de sauvetage maritime, j'ai été confronté à une situation critique : suite à des problèmes techniques majeurs, il a fallu **reconstituer et centraliser l'historique des données** des opérations passées.
+En tant que **Data Engineer junior** au sein du département de suivi des opérations de surveillance et de sauvetage maritime, Nous avons été confronté à une situation critique : suite à des problèmes techniques majeurs, il a fallu **reconstituer et centraliser l'historique des données** des opérations passées.
 
 ### Le défi
 
@@ -36,9 +36,9 @@ En tant que **Data Engineer junior** au sein du département de suivi des opéra
 - Créer un outil analytique accessible aux **utilisateurs non techniques** du département
 - Prévoir une architecture évolutive compatible avec de futures API
 
-### Mon rôle
+### Notre rôle
 
-Étant la seule personne technique du département, j'ai pris en charge l'ensemble du projet :
+Étant les seules personnes techniques du département, Nous avons pris en charge l'ensemble du projet :
 - Conception et implémentation du pipeline ETL
 - Modélisation et création de la base de données
 - Développement de l'interface utilisateur
@@ -46,7 +46,7 @@ En tant que **Data Engineer junior** au sein du département de suivi des opéra
 
 ---
 
-## 🎯 Objectifs et Livrables
+##  Objectifs et Livrables
 
 | Objectif | Livrable | Statut |
 |----------|----------|--------|
@@ -62,7 +62,7 @@ En tant que **Data Engineer junior** au sein du département de suivi des opéra
 
 ---
 
-## 🏗 Architecture Technique
+##  Architecture Technique
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -116,7 +116,7 @@ Un choix technique important a été d'adopter une **approche hybride** pour opt
 
 ---
 
-## 🔄 Pipeline ETL
+##  Pipeline ETL
 
 ### 1. Extraction (`extract.py`)
 
@@ -152,7 +152,7 @@ La validation utilise **Pandera** avec deux modes configurables :
 
 ---
 
-## 📊 Modèle de Données
+##  Modèle de Données
 
 ![Modèle Conceptuel de Données](docs/images/MCD_maritime.png)
 
@@ -179,7 +179,7 @@ L'audit est implémenté via des **triggers PostgreSQL** qui capturent automatiq
 
 ---
 
-## 💻 Application Streamlit
+##  Application Streamlit
 
 L'application est conçue pour des **utilisateurs non techniques** du département.
 
@@ -187,10 +187,10 @@ L'application est conçue pour des **utilisateurs non techniques** du départeme
 
 | Page | Fonctionnalités |
 |------|-----------------|
-| **📊 Dashboard** | KPIs temps réel, graphiques interactifs (Plotly), carte des opérations, filtres par période/CROSS/type |
-| **📋 Opérations** | Liste paginée, recherche avancée, vue détaillée, CRUD complet (création, modification, suppression) |
-| **🗂 Schéma** | Documentation dynamique de la base de données, diagramme ER |
-| **📝 Audit** | Journal des modifications, filtres, diff avant/après, export CSV |
+| ** Dashboard** | KPIs temps réel, graphiques interactifs (Plotly), carte des opérations, filtres par période/CROSS/type |
+| ** Opérations** | Liste paginée, recherche avancée, vue détaillée, CRUD complet (création, modification, suppression) |
+| ** Schéma** | Documentation dynamique de la base de données, diagramme ER |
+| ** Audit** | Journal des modifications, filtres, diff avant/après, export CSV |
 
 ### Système de rôles
 
@@ -202,7 +202,7 @@ L'application est conçue pour des **utilisateurs non techniques** du départeme
 
 ---
 
-## 🔧 Choix Techniques
+##  Choix Techniques
 
 ### Pourquoi PostgreSQL ?
 - Support natif **JSONB** pour stocker les anciennes/nouvelles valeurs dans l'audit
@@ -230,59 +230,12 @@ L'application est conçue pour des **utilisateurs non techniques** du départeme
 
 ---
 
-## 🚀 Installation et Utilisation
-
 ### Prérequis
 
 - Python 3.10+
 - PostgreSQL 14+
 
-### Installation
-
-```bash
-# 1. Cloner le repository
-git clone https://github.com/votre-username/secmar.git
-cd secmar
-
-# 2. Créer un environnement virtuel
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
-
-# 3. Installer les dépendances
-pip install -r requirements.txt
-
-# 4. Configurer l'environnement
-cp .env.example .env
-```
-
-### Configuration `.env`
-
-```env
-DB_HOST=localhost
-DB_DATABASE=secmar
-DB_USER=postgres
-DB_PASSWORD=votre_mot_de_passe
-DB_PORT=5432
-```
-
-### Exécution
-
-```bash
-# Lancer le pipeline ETL (extraction → validation → chargement)
-python -m src.etl.pipelines
-
-# Lancer l'application Streamlit
-streamlit run app/pages/1_Dashboard.py
-
-# Exécuter les tests
-pytest tests/ -v
-pytest tests/ --cov=src --cov-report=html  # Avec couverture
-```
-
----
-
-## 📁 Structure du Projet
+##  Structure du Projet
 
 ```
 secmar/
@@ -320,7 +273,7 @@ secmar/
 
 ---
 
-## 🛠 Technologies Utilisées
+##  Technologies Utilisées
 
 | Composant | Technologie | Version |
 |-----------|-------------|---------|
@@ -335,7 +288,7 @@ secmar/
 
 ---
 
-## 📚 Ressources
+##  Ressources
 
 - [Documentation SECMAR officielle](https://mtes-mct.github.io/secmar-documentation)
 - [Données SECMAR sur data.gouv.fr](https://www.data.gouv.fr)
@@ -344,5 +297,3 @@ secmar/
 - [Documentation Pandera](https://pandera.readthedocs.io)
 
 ---
-
-*Projet réalisé dans le cadre d'une formation Data Engineering — Janvier 2026*
