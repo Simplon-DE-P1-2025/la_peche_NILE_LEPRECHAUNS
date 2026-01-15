@@ -63,6 +63,7 @@ with st.sidebar:
         value=False,
         help="Inclure les CROSS fermés (Adge, Guyane, La Réunion, Martinique, etc.)",
     )
+    st.caption("Note: Inclure les CROSS historiques peut rallonger le chargement.")
     cross_actifs_only = not inclure_cross_historiques
 
 # =============================================================================

@@ -64,6 +64,7 @@ with st.sidebar:
         value=False,
         help="Inclure les CROSS fermés (Adge, Guyane, La Réunion, Martinique, etc.)",
     )
+    st.caption("Note: Inclure les CROSS historiques peut rallonger le chargement.")
     cross_actifs_only = not inclure_cross_historiques
 
 # =============================================================================
@@ -274,18 +275,18 @@ with st.expander("ℹ️ Comment interpréter les alertes?"):
 
     | Niveau | Z-score | Signification |
     |--------|---------|---------------|
-    | 🟢 **Normal** | -1 à +1 | Valeur dans la plage habituelle |
-    | 🟡 **Attention** | +1 à +2 ou -1 à -2 | Valeur inhabituelle, à surveiller |
-    | 🔴 **Alerte** | > +2 ou < -2 | Valeur significativement anormale |
+    | 🟢 **Normal** | -1.5 à +1.5 | Valeur dans la plage habituelle |
+    | 🟡 **Attention** | ±1.5 à ±2.5 | Valeur inhabituelle, à surveiller |
+    | 🔴 **Alerte** | > +2.5 ou < -2.5 | Valeur significativement anormale |
 
     #### Formule du Z-score:
     ```
     Z = (Valeur observée - Moyenne) / Écart-type
     ```
 
-    - Un Z-score de **+2** signifie que la valeur est **2 écarts-types au-dessus** de la moyenne
-    - Statistiquement, ~95% des observations se situent entre -2 et +2
-    - Une valeur au-delà de ±2 est donc considérée comme **exceptionnelle**
+    - Un Z-score de **+2.5** signifie que la valeur est **2.5 écarts-types au-dessus** de la moyenne
+    - Statistiquement, ~99% des observations se situent entre -2.5 et +2.5
+    - Une valeur au-delà de ±2.5 est donc considérée comme **exceptionnelle**
     """
     )
 

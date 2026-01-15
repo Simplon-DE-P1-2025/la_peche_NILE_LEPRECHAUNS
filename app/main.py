@@ -10,8 +10,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.database.connection import test_connection
-from src.database.raw_queries import get_kpis
+from src.database.base_queries import get_kpis_global
 from src.auth.authentificator import login_required, show_user_info, get_current_user
+from src.utils.warmload import warmload_critical_caches
 
 # =============================================================================
 # Configuration de la page
@@ -68,6 +69,9 @@ def main():
     if not login_required():
         st.stop()
 
+    # Pré-charger les caches critiques (améliore les temps de chargement)
+    warmload_critical_caches()
+
     # Afficher infos utilisateur
     show_user_info()
 
@@ -85,10 +89,10 @@ def main():
 
     st.markdown("---")
 
-    # KPIs rapides
+    # KPIs rapides (depuis vue matérialisée - instantané)
     st.subheader("📈 Aperçu rapide")
 
-    kpis = get_kpis()
+    kpis = get_kpis_global()
 
     if kpis:
         col1, col2, col3, col4 = st.columns(4)
@@ -112,9 +116,9 @@ def main():
             )
 
         with col4:
-            duree = kpis.get('duree_moyenne', 0) or 0
+            duree = kpis.get('duree_mediane', 0) or 0
             st.metric(
-                label="Durée moyenne",
+                label="Durée médiane",
                 value=f"{duree:.0f} min"
             )
 
