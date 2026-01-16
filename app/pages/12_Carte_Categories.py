@@ -422,6 +422,7 @@ if carte_data:
                 left: 30px;
                 z-index: 9999;
                 background: white;
+                color: black;
                 padding: 10px 12px;
                 border: 1px solid #ccc;
                 border-radius: 6px;
@@ -501,6 +502,8 @@ if cross_data:
             df_cross['categorie_personne'] = df_cross['categorie_personne'].replace(
                 {'Clandestin': 'Migrant', 'Migrant/Clandestin': 'Migrant'}
             )
+            # Exclure "Toutes catégories" pour refléter les distinctions entre catégories
+            df_cross = df_cross[df_cross['categorie_personne'] != 'Toutes catégories']
             df_cross = df_cross.groupby(['cross_name', 'categorie_personne'], as_index=False).agg({
                 'nb_operations': 'sum',
                 'total_personnes': 'sum',
