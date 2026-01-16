@@ -6,202 +6,209 @@ Ce répertoire contient tous les tests unitaires pour le projet.
 
 ```
 test/
-├── __init__.py           # Initialisation du package de tests
-├── test_extract.py       # Tests pour les fonctions d'extraction (src/etl/extract.py)
-├── test_transform.py     # Tests pour les fonctions de transformation (src/etl/transform.py)
-├── test_load.py          # Tests pour les fonctions de chargement (src/etl/load.py)
-└── README.md            # Ce fichier
+├── __init__.py              # Initialisation du package de tests
+├── README.md                # Ce fichier
+│
+├── # Tests ETL
+├── test_extract.py          # Tests pour src/etl/extract.py (load_config)
+├── test_transform.py        # Tests pour src/etl/transform.py
+├── test_load.py             # Tests pour src/etl/load.py (load_df_to_db)
+├── test_pipelines.py        # Tests pour src/etl/pipelines.py (pipeline_db_raw, pipeline_db_cleaned)
+│
+├── # Tests Validation
+├── test_validators.py       # Tests pour src/validation/validators.py (checks Pandera)
+├── test_schema_validation.py # Tests pour src/validation/schema_validation.py
+├── test_base.py             # Tests pour src/validation/base.py (ValidationMode, ValidationResult)
+├── test_integration.py      # Tests pour src/validation/integration.py (SchemaConverter)
+│
+└── # Exemples
+    └── test_utils.py        # Tests d'exemple pour apprendre (src/utils.py)
 ```
 
-## Installation des dépendances de test
+## Modules testés
 
-Les dépendances de test sont déjà incluses dans le `pyproject.toml`. Pour les installer:
+### ETL (src/etl/)
+| Fichier de test | Module testé | Fonctions testées |
+|-----------------|--------------|-------------------|
+| `test_extract.py` | `extract.py` | `load_config()` |
+| `test_load.py` | `load.py` | `load_df_to_db()` |
+| `test_pipelines.py` | `pipelines.py` | `pipeline_db_raw()`, `pipeline_db_cleaned()` |
+| `test_transform.py` | `transform.py` | (à compléter) |
+
+### Validation (src/validation/)
+| Fichier de test | Module testé | Fonctions/Classes testées |
+|-----------------|--------------|---------------------------|
+| `test_validators.py` | `validators.py` | `coordinates_check()`, `coordinates_in_france()`, `beaufort_scale_check()`, `douglas_scale_check()`, `departement_format_check()`, `resultat_humain_coherence()`, `flotteur_longueur_type_coherence()` |
+| `test_schema_validation.py` | `schema_validation.py` | `build_dataframe_schema()`, `valider_csv()` |
+| `test_base.py` | `base.py` | `ValidationMode`, `ValidationResult`, `EnumWarningCollector`, `create_enum_column()` |
+| `test_integration.py` | `integration.py` | `SchemaConverter`, `validate_for_crud()`, `validate_dataframe()` |
+
+## Installation des dépendances
 
 ```bash
+# Avec uv (recommandé)
 uv sync
-```
 
-ou si vous utilisez pip:
-
-```bash
+# Ou avec pip
 pip install -e .
 ```
 
 ## Exécution des tests
 
-### Exécuter tous les tests
+### Tous les tests
 ```bash
 pytest
 ```
 
-### Exécuter un fichier de test spécifique
+### Par module
+
 ```bash
-pytest test/test_extract.py
-pytest test/test_load.py
-pytest test/test_transform.py
+# Tests ETL
+pytest test/test_extract.py test/test_load.py test/test_pipelines.py -v
+
+# Tests Validation
+pytest test/test_validators.py test/test_schema_validation.py test/test_base.py test/test_integration.py -v
 ```
 
-### Exécuter une classe de test spécifique
+### Un fichier spécifique
 ```bash
-pytest test/test_extract.py::TestLoadConfig
-pytest test/test_load.py::TestLoadDfToDb
+pytest test/test_validators.py -v
 ```
 
-### Exécuter un test spécifique
+### Une classe spécifique
 ```bash
-pytest test/test_extract.py::TestLoadConfig::test_load_config_success
+pytest test/test_validators.py::TestBeaufortScaleCheck -v
 ```
 
-### Exécuter avec verbosité
+### Un test spécifique
 ```bash
-pytest -v
+pytest test/test_validators.py::TestBeaufortScaleCheck::test_valeur_valide_minimum -v
 ```
 
-### Exécuter avec rapport de couverture
+### Options utiles
 ```bash
-pytest --cov=src --cov-report=html
-```
-
-Le rapport HTML sera généré dans `htmlcov/index.html`
-
-### Exécuter avec capture de sortie désactivée (pour voir les prints)
-```bash
-pytest -s
-```
-
-### Exécuter uniquement les tests qui ont échoué la dernière fois
-```bash
-pytest --lf
-```
-
-### Exécuter en mode parallèle (plus rapide)
-```bash
-pytest -n auto
-```
-Note: nécessite `pytest-xdist` (à ajouter si besoin)
-
-## Markers personnalisés
-
-Les tests peuvent être marqués avec des markers personnalisés:
-
-- `@pytest.mark.slow` - Tests lents
-- `@pytest.mark.integration` - Tests d'intégration
-- `@pytest.mark.unit` - Tests unitaires
-
-### Exécuter uniquement certains types de tests
-```bash
-# Exécuter seulement les tests unitaires
-pytest -m unit
-
-# Exclure les tests lents
-pytest -m "not slow"
-
-# Exécuter les tests d'intégration
-pytest -m integration
+pytest -v              # Verbeux
+pytest -s              # Afficher les print()
+pytest -x              # S'arrêter au premier échec
+pytest --lf            # Relancer les tests échoués
+pytest --cov=src       # Couverture de code (nécessite pytest-cov)
 ```
 
 ## Couverture de code
 
-La configuration pytest est définie pour générer automatiquement des rapports de couverture:
+Pour générer un rapport de couverture (nécessite `pytest-cov`):
 
-- **Terminal**: Affiche le pourcentage de couverture après chaque exécution
-- **HTML**: Génère un rapport détaillé dans `htmlcov/`
-
-### Visualiser le rapport de couverture HTML
 ```bash
+# Installer pytest-cov si nécessaire
+pip install pytest-cov
+
+# Lancer avec couverture
 pytest --cov=src --cov-report=html
-open htmlcov/index.html  # Sur macOS
+
+# Ouvrir le rapport
+open htmlcov/index.html  # macOS
 ```
+
+## Résumé des tests par fichier
+
+### test_validators.py (30 tests)
+- `TestCoordinatesCheck` - 4 tests
+- `TestCoordinatesInFrance` - 4 tests
+- `TestBeaufortScaleCheck` - 6 tests
+- `TestDouglasScaleCheck` - 4 tests
+- `TestDepartementFormatCheck` - 6 tests
+- `TestResultatHumainCoherence` - 3 tests
+- `TestFlotteurLongueurTypeCoherence` - 3 tests
+
+### test_schema_validation.py (12 tests)
+- `TestBuildDataframeSchema` - 6 tests
+- `TestValiderCsv` - 2 tests
+- `TestTypeValidation` - 4 tests
+
+### test_base.py (18 tests)
+- `TestValidationMode` - 2 tests
+- `TestValidationResult` - 3 tests
+- `TestEnumWarningCollector` - 6 tests
+- `TestCreateEnumCheckWarning` - 2 tests
+- `TestCreateEnumColumn` - 5 tests
+
+### test_integration.py (17 tests)
+- `TestWidgetToPanderaMapping` - 4 tests
+- `TestSchemaConverter` - 6 tests
+- `TestValidateForCrud` - 3 tests
+- `TestValidateDataframe` - 2 tests
+- `TestValidationResultIntegration` - 2 tests
+
+### test_extract.py (2 tests)
+- `TestLoadConfig` - 2 tests
+
+### test_load.py (3 tests)
+- `TestLoadDfToDb` - 3 tests
+
+### test_pipelines.py (3 tests)
+- `TestPipelineDbRaw` - 2 tests
+- `TestPipelineDbCleaned` - 1 test
+
+### test_utils.py (3 tests)
+- Tests d'exemple pour apprendre
 
 ## Bonnes pratiques
 
-1. **Nommage**: Les fichiers de test doivent commencer par `test_`
-2. **Organisation**: Une classe de test par fonction ou groupe de fonctions liées
-3. **Isolation**: Chaque test doit être indépendant des autres
-4. **Fixtures**: Utilisez des fixtures pytest pour le code de setup réutilisable
-5. **Mocking**: Utilisez `unittest.mock` pour simuler les dépendances externes
-6. **Assertions**: Utilisez des assertions claires et descriptives
+1. **Structure AAA** : Arrange, Act, Assert
+2. **Un test = une chose** : Chaque test vérifie un seul comportement
+3. **Noms descriptifs** : `test_validation_echoue_si_champ_requis_vide`
+4. **Isolation** : Les tests ne dépendent pas les uns des autres
+5. **Mocks** : Simuler les dépendances externes (DB, API, fichiers)
 
-## Exemples de tests
+## Exemple de test simple
 
-### Test avec fixture
 ```python
-@pytest.fixture
-def sample_data():
-    return {"key": "value"}
+def test_addition():
+    # ARRANGE (Préparer)
+    a = 5
+    b = 3
 
-def test_example(sample_data):
-    assert sample_data["key"] == "value"
+    # ACT (Agir)
+    resultat = a + b
+
+    # ASSERT (Vérifier)
+    assert resultat == 8
 ```
 
-### Test avec mock
+## Exemple avec mock
+
 ```python
 from unittest.mock import patch, MagicMock
 
-@patch('module.function')
-def test_with_mock(mock_function):
-    mock_function.return_value = "mocked"
-    result = my_function()
-    assert result == "expected"
-```
+@patch('src.module.fonction_externe')
+def test_avec_mock(mock_fonction):
+    # Configurer le mock
+    mock_fonction.return_value = "valeur simulée"
 
-### Test avec exception
-```python
-def test_exception():
-    with pytest.raises(ValueError) as exc_info:
-        raise_error()
-    assert "error message" in str(exc_info.value)
+    # Appeler la fonction à tester
+    resultat = ma_fonction()
+
+    # Vérifier
+    mock_fonction.assert_called_once()
+    assert resultat == "valeur attendue"
 ```
 
 ## Dépannage
 
-### Les imports ne fonctionnent pas
-Assurez-vous d'être dans le répertoire racine du projet et que le package est installé:
+### ImportError
 ```bash
 pip install -e .
 ```
 
-### Les tests ne sont pas découverts
-Vérifiez que:
-- Les fichiers commencent par `test_`
-- Les classes commencent par `Test`
-- Les fonctions commencent par `test_`
-- Le fichier `__init__.py` existe dans le dossier `test/`
+### Tests non découverts
+Vérifier que:
+- Fichiers commencent par `test_`
+- Classes commencent par `Test`
+- Fonctions commencent par `test_`
+- `__init__.py` existe dans `test/`
 
-### Erreurs de dépendances
-Réinstallez les dépendances:
+### Erreur pytest-cov
 ```bash
-uv sync
-# ou
-pip install -e .
-```
-
-## Ajout de nouveaux tests
-
-Pour ajouter des tests pour un nouveau module:
-
-1. Créer un fichier `test_<nom_module>.py` dans ce dossier
-2. Importer le module à tester
-3. Créer des classes de test avec le préfixe `Test`
-4. Écrire des fonctions de test avec le préfixe `test_`
-5. Utiliser des assertions pour vérifier le comportement attendu
-
-Exemple:
-```python
-"""Tests pour mon_module"""
-import pytest
-from src.mon_module import ma_fonction
-
-class TestMaFonction:
-    """Tests pour ma_fonction"""
-
-    def test_cas_nominal(self):
-        """Test du cas nominal"""
-        result = ma_fonction(input_data)
-        assert result == expected_output
-
-    def test_cas_erreur(self):
-        """Test du cas d'erreur"""
-        with pytest.raises(ValueError):
-            ma_fonction(invalid_input)
+# Lancer sans couverture
+pytest --override-ini="addopts="
 ```
