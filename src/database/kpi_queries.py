@@ -1231,6 +1231,228 @@ def get_kpi_type_operation(
 
 
 # =============================================================================
+# KPIs par Catégorie de Personne
+# =============================================================================
+# Note: "Migrant" et "Clandestin" représentent une transition de nomenclature
+# (SECMAR → SeaMIS en 2021), pas une distinction de flux.
+
+@st.cache_data(ttl=3600)
+def get_kpi_comptage_categorie(
+    annee: Optional[int] = None,
+    categorie: Optional[str] = None,
+) -> list[dict]:
+    """Récupérer le comptage par catégorie de personne.
+
+    Args:
+        annee: Filtrer par année (optionnel)
+        categorie: Filtrer par catégorie spécifique (optionnel)
+
+    Returns:
+        Liste de dictionnaires avec comptages par catégorie
+    """
+    sql = """
+    SELECT *
+    FROM v_kpi_categorie_personne_comptage
+    WHERE (:annee IS NULL OR annee = :annee)
+        AND (:categorie IS NULL OR categorie_personne = :categorie)
+    ORDER BY annee DESC, total_personnes DESC
+    """
+    params = {"annee": annee, "categorie": categorie}
+    return execute_raw_sql(sql, params)
+
+
+@st.cache_data(ttl=3600)
+def get_kpi_taux_sauvetage_categorie(
+    annee: Optional[int] = None,
+    categorie: Optional[str] = None,
+    exclure_clandestins: bool = False,
+) -> list[dict]:
+    """Récupérer le taux de sauvetage par catégorie.
+
+    Args:
+        annee: Filtrer par année (optionnel)
+        categorie: Filtrer par catégorie spécifique (optionnel)
+        exclure_clandestins: Si True, exclut les clandestins et migrants du calcul
+
+    Returns:
+        Liste de dictionnaires avec taux par catégorie
+    """
+    if exclure_clandestins:
+        sql = """
+        SELECT *
+        FROM v_kpi_taux_sauvetage_categorie
+        WHERE (:annee IS NULL OR annee = :annee)
+            AND (:categorie IS NULL OR categorie_personne = :categorie)
+            AND categorie_personne NOT IN ('Clandestin', 'Migrant')
+        ORDER BY annee DESC, nombre_impliques DESC
+        """
+    else:
+        sql = """
+        SELECT *
+        FROM v_kpi_taux_sauvetage_categorie
+        WHERE (:annee IS NULL OR annee = :annee)
+            AND (:categorie IS NULL OR categorie_personne = :categorie)
+        ORDER BY annee DESC, nombre_impliques DESC
+        """
+    params = {"annee": annee, "categorie": categorie}
+    return execute_raw_sql(sql, params)
+
+
+@st.cache_data(ttl=3600)
+def get_kpi_evolution_categorie(
+    categorie: str,
+    limit: int = 24,
+) -> list[dict]:
+    """Récupérer l'évolution temporelle d'une catégorie.
+
+    Args:
+        categorie: Catégorie à analyser
+        limit: Nombre de périodes (mois) à retourner
+
+    Returns:
+        Liste de dictionnaires avec évolution mensuelle
+    """
+    sql = """
+    SELECT *
+    FROM v_kpi_evolution_categorie_mensuel
+    WHERE categorie_personne = :categorie
+    ORDER BY periode DESC
+    LIMIT :limit
+    """
+    params = {"categorie": categorie, "limit": limit}
+    return execute_raw_sql(sql, params)
+
+
+@st.cache_data(ttl=3600)
+def get_kpi_cross_categorie(
+    categorie: Optional[str] = None,
+    cross_name: Optional[str] = None,
+) -> list[dict]:
+    """Récupérer le benchmark CROSS par catégorie.
+
+    Args:
+        categorie: Filtrer par catégorie (optionnel)
+        cross_name: Filtrer par CROSS (optionnel)
+
+    Returns:
+        Liste de dictionnaires avec benchmark CROSS/catégorie
+    """
+    sql = """
+    SELECT *
+    FROM v_kpi_cross_categorie_benchmark
+    WHERE (:categorie IS NULL OR categorie_personne = :categorie)
+        AND (:cross_name IS NULL OR cross_name = :cross_name)
+    ORDER BY cross_name, total_personnes DESC
+    """
+    params = {"categorie": categorie, "cross_name": cross_name}
+    return execute_raw_sql(sql, params)
+
+
+@st.cache_data(ttl=3600)
+def get_kpi_securite_sans_clandestins(
+    annee: Optional[int] = None,
+    cross_name: Optional[str] = None,
+) -> list[dict]:
+    """Récupérer les métriques officielles sans clandestins.
+
+    Conformément aux directives du ministère, ces statistiques
+    excluent les personnes catégorisées comme "Clandestin" ou "Migrant".
+
+    Note: "Migrant" et "Clandestin" représentent la même population
+    avec une transition de nomenclature en 2021.
+
+    Args:
+        annee: Filtrer par année (optionnel)
+        cross_name: Filtrer par CROSS (optionnel)
+
+    Returns:
+        Liste de dictionnaires avec métriques sans clandestins
+    """
+    sql = """
+    SELECT *
+    FROM v_kpi_securite_sans_clandestins
+    WHERE (:annee IS NULL OR annee = :annee)
+        AND (:cross_name IS NULL OR cross_name = :cross_name)
+    ORDER BY periode DESC, cross_name
+    """
+    params = {"annee": annee, "cross_name": cross_name}
+    return execute_raw_sql(sql, params)
+
+
+@st.cache_data(ttl=3600)
+def get_carte_categories_personnes(
+    categorie: Optional[str] = None,
+    cross_name: Optional[str] = None,
+) -> list[dict]:
+    """Récupérer les données géographiques pour carte des catégories.
+
+    Args:
+        categorie: Filtrer par catégorie (optionnel)
+        cross_name: Filtrer par CROSS (optionnel)
+
+    Returns:
+        Liste de dictionnaires avec coordonnées et métriques par zone
+    """
+    sql = """
+    SELECT *
+    FROM v_kpi_categorie_geographique
+    WHERE (:categorie IS NULL OR categorie_personne = :categorie)
+        AND (:cross_name IS NULL OR cross_name = :cross_name)
+    ORDER BY total_personnes DESC
+    """
+    params = {"categorie": categorie, "cross_name": cross_name}
+    return execute_raw_sql(sql, params)
+
+
+@st.cache_data(ttl=3600)
+def get_carte_operations_categorie(
+    categorie: Optional[str] = None,
+    cross_name: Optional[str] = None,
+    lat_min: Optional[float] = None,
+    lat_max: Optional[float] = None,
+    lon_min: Optional[float] = None,
+    lon_max: Optional[float] = None,
+    limit: int = 10000,
+) -> list[dict]:
+    """Récupérer les opérations géolocalisées pour la carte des catégories.
+
+    Args:
+        categorie: Filtrer par catégorie (optionnel)
+        cross_name: Filtrer par CROSS (optionnel)
+        lat_min: Latitude minimum pour bounding box (optionnel)
+        lat_max: Latitude maximum pour bounding box (optionnel)
+        lon_min: Longitude minimum pour bounding box (optionnel)
+        lon_max: Longitude maximum pour bounding box (optionnel)
+        limit: Nombre maximum de résultats (défaut: 10000)
+
+    Returns:
+        Liste de dictionnaires avec opérations et coordonnées
+    """
+    sql = """
+    SELECT *
+    FROM v_kpi_carte_operations_categorie
+    WHERE (:categorie IS NULL OR categorie_personne = :categorie)
+        AND (:cross_name IS NULL OR cross_name = :cross_name)
+        AND (:lat_min IS NULL OR latitude >= :lat_min)
+        AND (:lat_max IS NULL OR latitude <= :lat_max)
+        AND (:lon_min IS NULL OR longitude >= :lon_min)
+        AND (:lon_max IS NULL OR longitude <= :lon_max)
+    ORDER BY nb_personnes DESC
+    LIMIT :limit
+    """
+    params = {
+        "categorie": categorie,
+        "cross_name": cross_name,
+        "lat_min": lat_min,
+        "lat_max": lat_max,
+        "lon_min": lon_min,
+        "lon_max": lon_max,
+        "limit": limit,
+    }
+    return execute_raw_sql(sql, params)
+
+
+# =============================================================================
 # Export DataFrame pour Power BI
 # =============================================================================
 
@@ -1259,7 +1481,14 @@ def export_kpi_to_dataframe(vue_name: str) -> pd.DataFrame:
         'v_kpi_alertes_anomalies',
         'v_kpi_alertes_anomalies_mv',
         'v_kpi_geographique',
-        'v_kpi_type_operation'
+        'v_kpi_type_operation',
+        # KPIs par catégorie de personne
+        'v_kpi_categorie_personne_comptage',
+        'v_kpi_taux_sauvetage_categorie',
+        'v_kpi_evolution_categorie_mensuel',
+        'v_kpi_cross_categorie_benchmark',
+        'v_kpi_securite_sans_clandestins',
+        'v_kpi_categorie_geographique',
     ]
 
     if vue_name not in valid_views:

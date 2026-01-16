@@ -646,20 +646,336 @@ CREATE INDEX IF NOT EXISTS idx_flotteurs_type ON flotteurs(type_flotteur);
 CREATE INDEX IF NOT EXISTS idx_flotteurs_categorie ON flotteurs(categorie_flotteur);
 
 -- =============================================================================
+-- VUE MATÉRIALISÉE 10: v_kpi_categorie_personne_comptage
+-- Comptage par catégorie de personne avec répartition annuelle
+-- Note: "Migrant" est le terme factuel pour personnes en vulnérabilité maritime
+-- =============================================================================
+DROP VIEW IF EXISTS v_kpi_categorie_personne_comptage CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS v_kpi_categorie_personne_comptage CASCADE;
+
+CREATE MATERIALIZED VIEW v_kpi_categorie_personne_comptage AS
+SELECT
+    COALESCE(rh.categorie_personne, 'Non renseigné') AS categorie_personne,
+    EXTRACT(YEAR FROM o.date_heure_reception_alerte)::INTEGER AS annee,
+    -- Comptages
+    COUNT(DISTINCT o.operation_id)::INTEGER AS nb_operations,
+    COALESCE(SUM(rh.nombre), 0)::INTEGER AS total_personnes,
+    COALESCE(SUM(rh.dont_nombre_blesse), 0)::INTEGER AS total_blesses,
+    -- Répartition par résultat
+    COALESCE(SUM(CASE WHEN rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+                      THEN rh.nombre ELSE 0 END), 0)::INTEGER AS saines_sauves,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain LIKE 'Personne decedee%'
+                      THEN rh.nombre ELSE 0 END), 0)::INTEGER AS decedes,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain = 'Personne disparue'
+                      THEN rh.nombre ELSE 0 END), 0)::INTEGER AS disparus,
+    -- Pourcentage du total annuel
+    ROUND(
+        SUM(rh.nombre)::NUMERIC / NULLIF(SUM(SUM(rh.nombre)) OVER (PARTITION BY EXTRACT(YEAR FROM o.date_heure_reception_alerte)), 0) * 100, 2
+    ) AS pct_total_annee
+FROM resultats_humain rh
+JOIN operations o ON rh.operation_id = o.operation_id
+WHERE o.date_heure_reception_alerte IS NOT NULL
+GROUP BY rh.categorie_personne, EXTRACT(YEAR FROM o.date_heure_reception_alerte);
+
+CREATE UNIQUE INDEX idx_kpi_cat_comptage_pk ON v_kpi_categorie_personne_comptage(categorie_personne, annee);
+
+-- =============================================================================
+-- VUE MATÉRIALISÉE 11: v_kpi_taux_sauvetage_categorie
+-- Taux de personnes saines et sauves ventilé par catégorie_personne
+-- Suit la définition officielle SECMAR (Programme 205)
+-- =============================================================================
+DROP VIEW IF EXISTS v_kpi_taux_sauvetage_categorie CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS v_kpi_taux_sauvetage_categorie CASCADE;
+
+CREATE MATERIALIZED VIEW v_kpi_taux_sauvetage_categorie AS
+SELECT
+    COALESCE(rh.categorie_personne, 'Non renseigné') AS categorie_personne,
+    EXTRACT(YEAR FROM o.date_heure_reception_alerte)::INTEGER AS annee,
+    COALESCE(SUM(CASE
+        WHEN rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS nombre_saines_sauves,
+    COALESCE(SUM(CASE
+        WHEN rh.resultat_humain IN (
+            'Personne secourue', 'Personne assistee', 'Personne retrouvee',
+            'Personne disparue', 'Personne decedee',
+            'Personne decedee accidentellement', 'Personne decedee naturellement'
+        )
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS nombre_prises_en_compte,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain LIKE 'Personne decedee%' THEN rh.nombre ELSE 0 END), 0)::INTEGER AS nombre_decedes,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain = 'Personne disparue' THEN rh.nombre ELSE 0 END), 0)::INTEGER AS nombre_disparus,
+    COALESCE(SUM(rh.dont_nombre_blesse), 0)::INTEGER AS nombre_blesses,
+    COALESCE(SUM(rh.nombre), 0)::INTEGER AS nombre_impliques
+FROM resultats_humain rh
+JOIN operations o ON rh.operation_id = o.operation_id
+WHERE o.date_heure_reception_alerte IS NOT NULL
+GROUP BY rh.categorie_personne, EXTRACT(YEAR FROM o.date_heure_reception_alerte);
+
+CREATE UNIQUE INDEX idx_kpi_taux_sauv_cat_pk ON v_kpi_taux_sauvetage_categorie(categorie_personne, annee);
+
+-- =============================================================================
+-- VUE MATÉRIALISÉE 12: v_kpi_evolution_categorie_mensuel
+-- Évolution mensuelle par catégorie de personne
+-- =============================================================================
+DROP VIEW IF EXISTS v_kpi_evolution_categorie_mensuel CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS v_kpi_evolution_categorie_mensuel CASCADE;
+
+CREATE MATERIALIZED VIEW v_kpi_evolution_categorie_mensuel AS
+SELECT
+    DATE_TRUNC('month', o.date_heure_reception_alerte)::DATE AS periode,
+    EXTRACT(YEAR FROM o.date_heure_reception_alerte)::INTEGER AS annee,
+    EXTRACT(MONTH FROM o.date_heure_reception_alerte)::INTEGER AS mois,
+    COALESCE(rh.categorie_personne, 'Non renseigné') AS categorie_personne,
+    -- Métriques
+    COUNT(DISTINCT o.operation_id)::INTEGER AS nb_operations,
+    COALESCE(SUM(rh.nombre), 0)::INTEGER AS total_personnes,
+    COALESCE(SUM(CASE
+        WHEN rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS saines_sauves,
+    COALESCE(SUM(CASE
+        WHEN rh.resultat_humain IN (
+            'Personne secourue', 'Personne assistee', 'Personne retrouvee',
+            'Personne disparue', 'Personne decedee',
+            'Personne decedee accidentellement', 'Personne decedee naturellement'
+        )
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS prises_en_compte,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain LIKE 'Personne decedee%' THEN rh.nombre ELSE 0 END), 0)::INTEGER AS decedes,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain = 'Personne disparue' THEN rh.nombre ELSE 0 END), 0)::INTEGER AS disparus
+FROM resultats_humain rh
+JOIN operations o ON rh.operation_id = o.operation_id
+WHERE o.date_heure_reception_alerte IS NOT NULL
+GROUP BY DATE_TRUNC('month', o.date_heure_reception_alerte),
+         EXTRACT(YEAR FROM o.date_heure_reception_alerte),
+         EXTRACT(MONTH FROM o.date_heure_reception_alerte),
+         rh.categorie_personne;
+
+CREATE UNIQUE INDEX idx_kpi_evol_cat_pk ON v_kpi_evolution_categorie_mensuel(periode, categorie_personne);
+
+-- =============================================================================
+-- VUE MATÉRIALISÉE 13: v_kpi_cross_categorie_benchmark
+-- Comparaison CROSS par catégorie de personne
+-- =============================================================================
+DROP VIEW IF EXISTS v_kpi_cross_categorie_benchmark CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS v_kpi_cross_categorie_benchmark CASCADE;
+
+CREATE MATERIALIZED VIEW v_kpi_cross_categorie_benchmark AS
+SELECT
+    o."cross" AS cross_name,
+    COALESCE(rh.categorie_personne, 'Non renseigné') AS categorie_personne,
+    -- Comptages
+    COUNT(DISTINCT o.operation_id)::INTEGER AS nb_operations,
+    COALESCE(SUM(rh.nombre), 0)::INTEGER AS total_personnes,
+    -- Métriques officielles SECMAR
+    COALESCE(SUM(CASE
+        WHEN rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS saines_sauves,
+    COALESCE(SUM(CASE
+        WHEN rh.resultat_humain IN (
+            'Personne secourue', 'Personne assistee', 'Personne retrouvee',
+            'Personne disparue', 'Personne decedee',
+            'Personne decedee accidentellement', 'Personne decedee naturellement'
+        )
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS prises_en_compte,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain LIKE 'Personne decedee%' THEN rh.nombre ELSE 0 END), 0)::INTEGER AS decedes,
+    COALESCE(SUM(CASE WHEN rh.resultat_humain = 'Personne disparue' THEN rh.nombre ELSE 0 END), 0)::INTEGER AS disparus,
+    -- Taux calculés
+    ROUND(
+        COALESCE(SUM(CASE
+            WHEN rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+            THEN rh.nombre ELSE 0 END), 0)::NUMERIC /
+        NULLIF(SUM(CASE
+            WHEN rh.resultat_humain IN (
+                'Personne secourue', 'Personne assistee', 'Personne retrouvee',
+                'Personne disparue', 'Personne decedee',
+                'Personne decedee accidentellement', 'Personne decedee naturellement'
+            ) THEN rh.nombre ELSE 0 END), 0) * 100, 2
+    ) AS taux_saines_sauves,
+    -- Ranking par CROSS pour cette catégorie
+    RANK() OVER (
+        PARTITION BY rh.categorie_personne
+        ORDER BY SUM(rh.nombre) DESC
+    ) AS rank_volume_categorie
+FROM resultats_humain rh
+JOIN operations o ON rh.operation_id = o.operation_id
+WHERE o."cross" IS NOT NULL
+    AND o.date_heure_reception_alerte IS NOT NULL
+GROUP BY o."cross", rh.categorie_personne;
+
+CREATE UNIQUE INDEX idx_kpi_cross_cat_pk ON v_kpi_cross_categorie_benchmark(cross_name, categorie_personne);
+
+-- =============================================================================
+-- VUE MATÉRIALISÉE 14: v_kpi_securite_sans_clandestins
+-- Métriques officielles excluant les clandestins/migrants (usage ministériel)
+-- =============================================================================
+DROP VIEW IF EXISTS v_kpi_securite_sans_clandestins CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS v_kpi_securite_sans_clandestins CASCADE;
+
+CREATE MATERIALIZED VIEW v_kpi_securite_sans_clandestins AS
+SELECT
+    DATE_TRUNC('month', o.date_heure_reception_alerte)::DATE AS periode,
+    EXTRACT(YEAR FROM o.date_heure_reception_alerte)::INTEGER AS annee,
+    EXTRACT(MONTH FROM o.date_heure_reception_alerte)::INTEGER AS mois,
+    o."cross" AS cross_name,
+    -- Métriques SANS clandestins (ni migrants - même transition de nomenclature)
+    COUNT(DISTINCT o.operation_id)::INTEGER AS nb_operations,
+    COALESCE(SUM(CASE WHEN rh.categorie_personne NOT IN ('Clandestin', 'Migrant') THEN rh.nombre ELSE 0 END), 0)::INTEGER AS total_personnes_sans_clandestins,
+    COALESCE(SUM(CASE
+        WHEN rh.categorie_personne NOT IN ('Clandestin', 'Migrant') AND
+             rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS saines_sauves_sans_clandestins,
+    COALESCE(SUM(CASE
+        WHEN rh.categorie_personne NOT IN ('Clandestin', 'Migrant') AND
+             rh.resultat_humain IN (
+                'Personne secourue', 'Personne assistee', 'Personne retrouvee',
+                'Personne disparue', 'Personne decedee',
+                'Personne decedee accidentellement', 'Personne decedee naturellement'
+             )
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS prises_en_compte_sans_clandestins,
+    COALESCE(SUM(CASE
+        WHEN rh.categorie_personne NOT IN ('Clandestin', 'Migrant') AND rh.resultat_humain LIKE 'Personne decedee%'
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS decedes_sans_clandestins,
+    -- Métriques AVEC clandestins (pour comparaison)
+    COALESCE(SUM(rh.nombre), 0)::INTEGER AS total_personnes_avec_clandestins,
+    COALESCE(SUM(CASE WHEN rh.categorie_personne IN ('Clandestin', 'Migrant') THEN rh.nombre ELSE 0 END), 0)::INTEGER AS total_clandestins_migrants,
+    -- Taux sans clandestins
+    ROUND(
+        COALESCE(SUM(CASE
+            WHEN rh.categorie_personne NOT IN ('Clandestin', 'Migrant') AND
+                 rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+            THEN rh.nombre ELSE 0 END), 0)::NUMERIC /
+        NULLIF(SUM(CASE
+            WHEN rh.categorie_personne NOT IN ('Clandestin', 'Migrant') AND
+                 rh.resultat_humain IN (
+                    'Personne secourue', 'Personne assistee', 'Personne retrouvee',
+                    'Personne disparue', 'Personne decedee',
+                    'Personne decedee accidentellement', 'Personne decedee naturellement'
+                 ) THEN rh.nombre ELSE 0 END), 0) * 100, 2
+    ) AS taux_saines_sauves_sans_clandestins
+FROM resultats_humain rh
+JOIN operations o ON rh.operation_id = o.operation_id
+WHERE o.date_heure_reception_alerte IS NOT NULL
+GROUP BY DATE_TRUNC('month', o.date_heure_reception_alerte),
+         EXTRACT(YEAR FROM o.date_heure_reception_alerte),
+         EXTRACT(MONTH FROM o.date_heure_reception_alerte),
+         o."cross";
+
+CREATE INDEX idx_kpi_sec_sans_clnd_periode ON v_kpi_securite_sans_clandestins(periode);
+
+-- =============================================================================
+-- VUE MATÉRIALISÉE 15: v_kpi_categorie_geographique
+-- Données géographiques pour carte des catégories de personnes
+-- Agrège par CROSS (pas par département) pour des coordonnées maritimes correctes
+-- =============================================================================
+DROP VIEW IF EXISTS v_kpi_categorie_geographique CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS v_kpi_categorie_geographique CASCADE;
+
+CREATE MATERIALIZED VIEW v_kpi_categorie_geographique AS
+SELECT
+    o."cross" AS cross_name,
+    o.prefecture_maritime,
+    COALESCE(rh.categorie_personne, 'Non renseigné') AS categorie_personne,
+    COUNT(DISTINCT o.operation_id)::INTEGER AS nb_operations,
+    COALESCE(SUM(rh.nombre), 0)::INTEGER AS total_personnes,
+    COALESCE(SUM(CASE
+        WHEN rh.resultat_humain IN ('Personne secourue', 'Personne assistee', 'Personne retrouvee')
+        THEN rh.nombre ELSE 0
+    END), 0)::INTEGER AS saines_sauves,
+    -- Coordonnées moyennes des opérations (filtrage coordonnées valides)
+    ROUND(AVG(CASE
+        WHEN o.latitude BETWEEN -90 AND 90
+         AND o.longitude BETWEEN -180 AND 180
+        THEN o.latitude
+    END)::NUMERIC, 4) AS latitude,
+    ROUND(AVG(CASE
+        WHEN o.latitude BETWEEN -90 AND 90
+         AND o.longitude BETWEEN -180 AND 180
+        THEN o.longitude
+    END)::NUMERIC, 4) AS longitude
+FROM resultats_humain rh
+JOIN operations o ON rh.operation_id = o.operation_id
+WHERE o.latitude IS NOT NULL
+  AND o.longitude IS NOT NULL
+  AND o."cross" IS NOT NULL
+GROUP BY o."cross", o.prefecture_maritime, rh.categorie_personne;
+
+CREATE INDEX idx_kpi_cat_geo_cross ON v_kpi_categorie_geographique(cross_name);
+
+-- =============================================================================
+-- VUE MATÉRIALISÉE 16: v_kpi_carte_operations_categorie
+-- Carte détaillée: points individuels d'opérations avec catégorie dominante
+-- Utile pour visualisation fine (mais volumineuse: ~250k lignes)
+-- =============================================================================
+DROP MATERIALIZED VIEW IF EXISTS v_kpi_carte_operations_categorie CASCADE;
+
+CREATE MATERIALIZED VIEW v_kpi_carte_operations_categorie AS
+WITH op_categories AS (
+    SELECT
+        o.operation_id,
+        o."cross" AS cross_name,
+        o.latitude,
+        o.longitude,
+        rh.categorie_personne,
+        SUM(rh.nombre) AS nb_personnes,
+        ROW_NUMBER() OVER (PARTITION BY o.operation_id ORDER BY SUM(rh.nombre) DESC) AS rn
+    FROM operations o
+    JOIN resultats_humain rh ON o.operation_id = rh.operation_id
+    WHERE o.latitude IS NOT NULL
+      AND o.longitude IS NOT NULL
+      AND o.latitude BETWEEN -90 AND 90
+      AND o.longitude BETWEEN -180 AND 180
+    GROUP BY o.operation_id, o."cross", o.latitude, o.longitude, rh.categorie_personne
+)
+SELECT
+    operation_id,
+    cross_name,
+    latitude,
+    longitude,
+    COALESCE(categorie_personne, 'Non renseigné') AS categorie_personne,
+    nb_personnes::INTEGER
+FROM op_categories
+WHERE rn = 1;
+
+CREATE INDEX idx_carte_op_cat_cross ON v_kpi_carte_operations_categorie(cross_name);
+CREATE INDEX idx_carte_op_cat_categorie ON v_kpi_carte_operations_categorie(categorie_personne);
+
+-- Index pour les tables sources
+CREATE INDEX IF NOT EXISTS idx_resultats_humain_categorie ON resultats_humain(categorie_personne);
+
+-- =============================================================================
 -- Vérification
 -- =============================================================================
 DO $$
 BEGIN
     RAISE NOTICE '=== Vues KPI Analytics créées avec succès ===';
     RAISE NOTICE '';
-    RAISE NOTICE 'Vues disponibles:';
-    RAISE NOTICE '  1. v_kpi_securite_mensuel    - Taux de sécurité mensuels';
-    RAISE NOTICE '  2. v_kpi_cross_benchmark     - Performance CROSS avec ranking';
-    RAISE NOTICE '  3. v_kpi_flotteurs_analyse   - Stats par type de flotteur';
-    RAISE NOTICE '  4. v_kpi_temporel_multidim   - Analyse temporelle croisée';
-    RAISE NOTICE '  5. v_kpi_meteo_correlation   - Corrélations météo/gravité';
-    RAISE NOTICE '  6. v_kpi_yoy_comparison      - Comparatifs Year-over-Year';
-    RAISE NOTICE '  7. v_kpi_alertes_anomalies   - Détection anomalies (z-scores)';
-    RAISE NOTICE '  8. v_kpi_geographique        - Analyse par zone géographique';
-    RAISE NOTICE '  9. v_kpi_type_operation      - Stats par type opération';
+    RAISE NOTICE 'Vues normales (1-9):';
+    RAISE NOTICE '  1. v_kpi_securite_mensuel        - Taux de sécurité mensuels';
+    RAISE NOTICE '  2. v_kpi_cross_benchmark         - Performance CROSS avec ranking';
+    RAISE NOTICE '  3. v_kpi_flotteurs_analyse       - Stats par type de flotteur';
+    RAISE NOTICE '  4. v_kpi_temporel_multidim       - Analyse temporelle croisée';
+    RAISE NOTICE '  5. v_kpi_meteo_correlation       - Corrélations météo/gravité';
+    RAISE NOTICE '  6. v_kpi_yoy_comparison          - Comparatifs Year-over-Year';
+    RAISE NOTICE '  7. v_kpi_alertes_anomalies       - Détection anomalies (z-scores)';
+    RAISE NOTICE '  8. v_kpi_geographique            - Analyse par zone géographique';
+    RAISE NOTICE '  9. v_kpi_type_operation          - Stats par type opération';
+    RAISE NOTICE '';
+    RAISE NOTICE 'Vues MATÉRIALISÉES catégories (10-16):';
+    RAISE NOTICE ' 10. v_kpi_categorie_personne_comptage   - Comptage par catégorie (MV)';
+    RAISE NOTICE ' 11. v_kpi_taux_sauvetage_categorie      - Taux sauvetage par catégorie (MV)';
+    RAISE NOTICE ' 12. v_kpi_evolution_categorie_mensuel   - Évolution mensuelle (MV)';
+    RAISE NOTICE ' 13. v_kpi_cross_categorie_benchmark     - Benchmark CROSS/catégorie (MV)';
+    RAISE NOTICE ' 14. v_kpi_securite_sans_clandestins     - Métriques sans clandestins (MV)';
+    RAISE NOTICE ' 15. v_kpi_categorie_geographique        - Carte par CROSS (MV)';
+    RAISE NOTICE ' 16. v_kpi_carte_operations_categorie    - Carte détaillée ops (MV)';
+    RAISE NOTICE '';
+    RAISE NOTICE 'Note: Les vues matérialisées (MV) nécessitent un REFRESH après chargement de données.';
+    RAISE NOTICE 'Utiliser: sql/refresh_materialized_views.sql';
 END $$;
