@@ -239,6 +239,16 @@ DATA_VALIDATION:
     vent_direction_categorie:
       type: str
       nullable: true
+      checks:
+        - isin:
+          - "nord"
+          - "nord-est"
+          - "est"
+          - "sud-est"
+          - "sud"
+          - "sud-ouest"
+          - "ouest"
+          - "nord-ouest"
     vent_force:
       type: float
       nullable: true
@@ -266,6 +276,10 @@ DATA_VALIDATION:
     systeme_source:
       type: str
       nullable: false
+      checks:
+        - isin:
+          - "secmarweb"
+          - "seamis_json"
 
   resultats_humain:
     operation_id:
@@ -274,6 +288,18 @@ DATA_VALIDATION:
     categorie_personne:
       type: str
       nullable: false
+      checks:
+        - isin:
+          - "Autre"
+          - "Plaisancier français"
+          - "Pratiquant loisirs nautiques"
+          - "Migrant"
+          - "Clandestin"
+          - "Commerce français"
+          - "Marin étranger"
+          - "Pêcheur français"
+          - "Pêcheur amateur"
+          - "Toutes catégories"
     resultat_humain:
       type: str
       nullable: false

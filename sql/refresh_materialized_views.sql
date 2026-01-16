@@ -59,6 +59,31 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_impact_vacances_cross_actifs_mv;
 -- 17. v_kpi_meteo_correlation_cross_actifs_mv (Meteo - CROSS actifs)
 REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_meteo_correlation_cross_actifs_mv;
 
+-- =============================================================================
+-- VUES CATÉGORIES DE PERSONNES (ajoutées Janvier 2026)
+-- =============================================================================
+
+-- 18. v_kpi_categorie_personne_comptage (Comptage par catégorie)
+REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_categorie_personne_comptage;
+
+-- 19. v_kpi_taux_sauvetage_categorie (Taux sauvetage par catégorie)
+REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_taux_sauvetage_categorie;
+
+-- 20. v_kpi_evolution_categorie_mensuel (Évolution mensuelle catégories)
+REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_evolution_categorie_mensuel;
+
+-- 21. v_kpi_cross_categorie_benchmark (Benchmark CROSS par catégorie)
+REFRESH MATERIALIZED VIEW CONCURRENTLY v_kpi_cross_categorie_benchmark;
+
+-- 22. v_kpi_securite_sans_clandestins (Métriques sans clandestins/migrants)
+REFRESH MATERIALIZED VIEW v_kpi_securite_sans_clandestins;
+
+-- 23. v_kpi_categorie_geographique (Données géographiques catégories)
+REFRESH MATERIALIZED VIEW v_kpi_categorie_geographique;
+
+-- 24. v_kpi_carte_operations_categorie (Carte détaillée opérations)
+REFRESH MATERIALIZED VIEW v_kpi_carte_operations_categorie;
+
 SELECT 'Vues matérialisées rafraîchies!' as status,
        COUNT(*) as operations_count
 FROM operations_stats;

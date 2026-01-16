@@ -1,4 +1,4 @@
-from src.utils import addition, est_pair
+from src.helpers import addition, est_pair
 
 def test_addition_nombres_positifs():
     # ARRANGE

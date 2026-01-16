@@ -82,13 +82,24 @@ RESULTAT_HUMAIN = [
 
 
 # =============================================================================
-# Categories de personnes
+# Categories de personnes - OFFICIELLES SECMAR
 # =============================================================================
+# Source: Documentation SECMAR officielle
+# Note historique (analyse DB):
+#   - "Clandestin" = terme legacy SECMAR (2009-2020)
+#   - "Migrant" = terme SeaMIS moderne (2019-2025)
+#   - Transition de nomenclature en 2021 (pas une distinction de flux)
 CATEGORIE_PERSONNE = [
-    "Equipage",
-    "Passager",
     "Autre",
-    "Inconnu",
+    "Plaisancier français",
+    "Pratiquant loisirs nautiques",
+    "Migrant",
+    "Clandestin",
+    "Commerce français",
+    "Marin étranger",
+    "Pêcheur français",
+    "Pêcheur amateur",
+    "Toutes catégories",
 ]
 
 
@@ -154,15 +165,25 @@ ROLE_VALUES = [
 # =============================================================================
 # Direction du vent (categories cardinales)
 # =============================================================================
+# Les donnees sources utilisent les noms complets en minuscules
 VENT_DIRECTION_CATEGORIE = [
-    "N",
-    "NE",
-    "E",
-    "SE",
-    "S",
-    "SW",
-    "W",
-    "NW",
+    "nord",
+    "nord-est",
+    "est",
+    "sud-est",
+    "sud",
+    "sud-ouest",
+    "ouest",
+    "nord-ouest",
+]
+
+
+# =============================================================================
+# Systeme source des donnees
+# =============================================================================
+SYSTEME_SOURCE = [
+    "secmarweb",
+    "seamis_json",
 ]
 
 
