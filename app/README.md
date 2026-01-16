@@ -24,7 +24,8 @@ app/
 │   ├── 7_Performance_CROSS.py   # Performance des CROSS
 │   ├── 8_Analyse_Flotteurs.py   # Analyse des flotteurs
 │   ├── 9_Saisonnalite_Meteo.py  # Saisonnalite et meteo
-│   └── 10_Alertes_Anomalies.py  # Alertes et anomalies
+│   ├── 10_Alertes_Anomalies.py  # Alertes et anomalies
+│   └── 11_Diagnostic.py         # Diagnostic performance
 └── components/          # Composants reutilisables
     ├── state.py         # Gestion etat session
     ├── operations/      # Composants operations
@@ -88,6 +89,12 @@ app/
 - Detection d'anomalies dans les donnees
 - Alertes configurables
 - Qualite des donnees
+
+### 11_Diagnostic.py - Diagnostic Performance
+- Test de latence reseau vers la base de donnees
+- Benchmark des requetes Dashboard
+- Comparaison des temps avec/sans cache Streamlit
+- Recommandations d'optimisation
 
 ## Authentification
 

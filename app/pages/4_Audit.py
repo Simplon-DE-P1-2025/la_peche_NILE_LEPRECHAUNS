@@ -284,31 +284,40 @@ with st.expander("ℹ️ A propos de l'audit"):
     ### Comment fonctionne l'audit ?
 
     L'audit est géré par des **triggers PostgreSQL** qui s'exécutent automatiquement
-    lors de chaque modification (INSERT, UPDATE, DELETE) sur les tables :
+    lors de chaque modification (INSERT, UPDATE, DELETE) sur **3 tables** :
 
     - `operations`
     - `flotteurs`
     - `resultats_humain`
-    - `operations_stats`
+
+    > `operations_stats` est une **VIEW calculée** (pas de trigger).
+
+    ### Mode ETL (bypass)
+
+    Lors des chargements massifs ETL, le mode bypass est activé :
+    ```sql
+    SET app.etl_mode = 'TRUE';
+    ```
+    Les triggers ne loguent pas individuellement - un résumé est créé en fin de pipeline.
 
     ### Informations capturées
 
     | Champ | Description |
     |-------|-------------|
     | `table_name` | Table modifiée |
-    | `operation_type` | INSERT, UPDATE ou DELETE |
+    | `operation_type` | INSERT, UPDATE, DELETE ou ETL_LOAD |
     | `record_id` | ID de l'enregistrement concerné |
-    | `old_values` | Valeurs AVANT modification (JSONB) |
-    | `new_values` | Valeurs APRÈS modification (JSONB) |
+    | `old_values` | Diff des valeurs (UPDATE) ou PK (INSERT/DELETE) |
+    | `new_values` | Diff des valeurs modifiées uniquement |
     | `changed_fields` | Liste des champs modifiés (UPDATE) |
     | `user_id` | Utilisateur ayant fait la modification |
     | `timestamp` | Date et heure |
 
-    ### Avantages des triggers
+    ### Caractéristiques des triggers
 
-    - ✅ Capture **toutes** les modifications, même directes en SQL
+    - ✅ Capture les modifications directes en SQL (hors mode ETL)
+    - ✅ Stockage optimisé (diff uniquement, pas de snapshots complets)
     - ✅ Aucun code à maintenir côté application
-    - ✅ Performance optimale
-    - ✅ Impossible à contourner
+    - ⚠️ Bypassé en mode ETL pour la performance
     """
     )

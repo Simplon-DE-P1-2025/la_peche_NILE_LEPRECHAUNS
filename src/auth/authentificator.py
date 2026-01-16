@@ -181,6 +181,13 @@ def login_page() -> Optional[bool]:
         for key in ["authentication_status", "username", "name", "authenticated", "role"]:
             if key in st.session_state:
                 del st.session_state[key]
+
+        # Invalider le cookie pour éviter une boucle infinie
+        try:
+            authenticator.logout(location='unrendered')
+        except Exception:
+            pass
+
         st.warning("Session expirée ou invalide. Veuillez vous reconnecter.")
         st.rerun()
         return None

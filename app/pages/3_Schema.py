@@ -118,9 +118,9 @@ st.subheader("📋 Description des tables")
 tables = get_all_tables()
 
 if not tables:
-    st.warning("Aucune table trouvee dans le schema public.")
+    st.warning("Aucune table trouvee dans le schema clean.")
 else:
-    st.caption(f"{len(tables)} tables dans le schema public")
+    st.caption(f"{len(tables)} tables dans le schema clean")
 
     # Recuperer les FK pour afficher les relations
     foreign_keys = get_foreign_keys()
@@ -223,8 +223,10 @@ st.subheader("🔍 Systeme d'audit")
 
 st.markdown(
     """
-L'audit est gere par des **triggers PostgreSQL** qui capturent automatiquement
-toutes les modifications sur les tables principales.
+L'audit est gere par des **triggers PostgreSQL** qui capturent les modifications
+sur **3 tables principales** : `operations`, `flotteurs`, `resultats_humain`.
+
+> `operations_stats` est une **VIEW calculee**, pas une table auditee.
 """
 )
 
@@ -236,18 +238,26 @@ CREATE TRIGGER audit_operations
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
 
 -- La fonction audit_trigger_func() :
--- 1. Capture OLD et NEW values en JSONB
--- 2. Identifie les champs modifies
+-- 1. Verifie le mode ETL (bypass si app.etl_mode = TRUE)
+-- 2. Capture les champs modifies (diff uniquement, pas de snapshot complet)
 -- 3. Log l'utilisateur via current_setting('app.current_user')
 -- 4. Insere dans audit_log
 """,
     language="sql",
 )
 
+st.warning(
+    """
+**Mode ETL** : Lors des chargements massifs ETL (`app.etl_mode = TRUE`),
+les triggers sont bypasses pour des raisons de performance.
+Un resume est logue en fin de pipeline.
+"""
+)
+
 st.info(
     """
-**Avantage des triggers** : L'audit capture TOUTES les modifications,
-meme celles faites directement en SQL (pas uniquement via l'application).
+**Avantage des triggers** : L'audit capture les modifications faites
+directement en SQL (hors mode ETL).
 """
 )
 

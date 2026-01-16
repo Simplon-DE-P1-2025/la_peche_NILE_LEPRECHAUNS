@@ -9,7 +9,7 @@ import io
 from src.etl.extract import load_config, extract_url
 from src.etl.load import load_df_to_db
 from src.validation.schema_validation import build_dataframe_schema, valider_csv
-from src.database.connection import engine, execute_sql_file
+from src.database.connection import engine, execute_sql_file, refresh_materialized_views
 from src.config import SQL_DIR
 
 import time
@@ -217,11 +217,29 @@ def pipeline_db_raw() -> None:
             schema="raw_test"  # à supprimer si non nécessaire
         )
 
-def pipeline_db_cleaned() -> None:
+def pipeline_db_cleaned(
+    skip_extraction: bool = False,
+    skip_validation: bool = False,
+    skip_data_load: bool = False,
+    skip_users: bool = False,
+    schema_only: bool = False,
+) -> None:
     """
     Pipeline ETL pour l'alimentation de la base de données CLEANED.
 
-    À implémenter.
+    Parameters
+    ----------
+    skip_extraction : bool
+        Si True, saute l'extraction des CSV (étape 1).
+    skip_validation : bool
+        Si True, saute la validation et le merge (étapes 2-4).
+    skip_data_load : bool
+        Si True, saute le chargement en base (étape 6).
+    skip_users : bool
+        Si True, saute la création des utilisateurs test (étape 7).
+    schema_only : bool
+        Raccourci pour skip_extraction + skip_validation + skip_data_load.
+        Utile pour ne modifier que le schéma/vues sans recharger les données.
 
     Returns
     -------
@@ -232,6 +250,13 @@ def pipeline_db_cleaned() -> None:
     log("PIPELINE DB CLEANED - DÉMARRAGE", "START")
     log("=" * 50)
 
+    # Raccourci schema_only
+    if schema_only:
+        skip_extraction = True
+        skip_validation = True
+        skip_data_load = True
+        log("Mode schema_only activé (skip extraction/validation/data_load)")
+
     # Chargement config
     log("Chargement de la configuration...")
     cfg = load_config("config/config_clean.yml")
@@ -239,76 +264,84 @@ def pipeline_db_cleaned() -> None:
     log(f"  Output dir: {cfg['EXTRACT']['output_dir']}")
 
     # Étape 1 — Extraction des fichiers CSV
-    log("-" * 40)
-    log("▶ ÉTAPE 1: Extraction des fichiers CSV", "STEP")
-    extract_start = time.time()
-    _data_list = extract_url(
-        dataset_url=cfg['EXTRACT']['dataset_url'],
-        timeout_sec=cfg['EXTRACT']['timeout_sec'],
-        output_dir=cfg['EXTRACT']['output_dir']
-    )
-    log(f"✓ Extraction terminée ({time.time() - extract_start:.2f}s)", "STEP")
-
-    # Étape 2 — Construction des schémas de validation Pandera
-    log("-" * 40)
-    log("▶ ÉTAPE 2: Construction des schémas Pandera", "STEP")
-    schema_start = time.time()
-    data_validation = cfg['DATA_VALIDATION']
-    pandera_schemas = {}
-
-    for schema_name, schema_def in data_validation.items():
-        log(f"  Building schema: {schema_name}")
-        pandera_schemas[schema_name] = build_dataframe_schema(
-            schema_def,
-            strict_method=True
-            )
-    log(f"✓ Schémas construits: {list(pandera_schemas.keys())} ({time.time() - schema_start:.2f}s)", "STEP")
-
-    # Étape 3 — Validation et chargement en base
-    log("-" * 40)
-    log("▶ ÉTAPE 3: Validation des CSV", "STEP")
-    validation_start = time.time()
-
-    dfs_validated = {}
-
-    for schema_name, schema in pandera_schemas.items():
-        csv_path = Path(f"{cfg['EXTRACT']['output_dir']}/{schema_name}.csv")
-        log(f"  Validation de {schema_name}...")
-        val_start = time.time()
-
-        # Validation des données (lazy pour récupérer toutes les erreurs)
-        df = valider_csv(
-            csv_path=csv_path,
-            schema=schema,
-            lazy=True
+    if not skip_extraction:
+        log("-" * 40)
+        log("▶ ÉTAPE 1: Extraction des fichiers CSV", "STEP")
+        extract_start = time.time()
+        _data_list = extract_url(
+            dataset_url=cfg['EXTRACT']['dataset_url'],
+            timeout_sec=cfg['EXTRACT']['timeout_sec'],
+            output_dir=cfg['EXTRACT']['output_dir']
         )
-        df_filtered = df.loc[:, schema.columns.keys()]
-        dfs_validated[schema_name] = df_filtered
-        log(f"    → {len(df_filtered)} lignes valides ({time.time() - val_start:.2f}s)")
+        log(f"✓ Extraction terminée ({time.time() - extract_start:.2f}s)", "STEP")
+    else:
+        log("⏭ Étape 1 (Extraction) sautée")
 
-    log(f"✓ Validation terminée ({time.time() - validation_start:.2f}s)", "STEP")
+    # Étapes 2-4 — Validation (schémas, CSV, merge)
+    if not skip_validation:
+        # Étape 2 — Construction des schémas de validation Pandera
+        log("-" * 40)
+        log("▶ ÉTAPE 2: Construction des schémas Pandera", "STEP")
+        schema_start = time.time()
+        data_validation = cfg['DATA_VALIDATION']
+        pandera_schemas = {}
 
-    # Étape 4 — Merge des DataFrames
-    log("-" * 40)
-    log("▶ ÉTAPE 4: Merge operations + operations_stats", "STEP")
-    merge_start = time.time()
-    log(f"  operations: {len(dfs_validated['operations'])} lignes")
-    log(f"  operations_stats: {len(dfs_validated['operations_stats'])} lignes")
+        for schema_name, schema_def in data_validation.items():
+            log(f"  Building schema: {schema_name}")
+            pandera_schemas[schema_name] = build_dataframe_schema(
+                schema_def,
+                strict_method=True
+                )
+        log(f"✓ Schémas construits: {list(pandera_schemas.keys())} ({time.time() - schema_start:.2f}s)", "STEP")
 
-    df_operations = pd.merge(
-        dfs_validated["operations"],
-        dfs_validated["operations_stats"],
-        on="operation_id",
-        how="left"
-    )
+        # Étape 3 — Validation et chargement en base
+        log("-" * 40)
+        log("▶ ÉTAPE 3: Validation des CSV", "STEP")
+        validation_start = time.time()
 
-    # Supprimer les deux DataFrames inutiles
-    dfs_validated.pop("operations", None)
-    dfs_validated.pop("operations_stats", None)
+        dfs_validated = {}
 
-    # Ajouter le DataFrame fusionné
-    dfs_validated["operations"] = df_operations
-    log(f"✓ Merge terminé: {len(df_operations)} lignes ({time.time() - merge_start:.2f}s)", "STEP")
+        for schema_name, schema in pandera_schemas.items():
+            csv_path = Path(f"{cfg['EXTRACT']['output_dir']}/{schema_name}.csv")
+            log(f"  Validation de {schema_name}...")
+            val_start = time.time()
+
+            # Validation des données (lazy pour récupérer toutes les erreurs)
+            df = valider_csv(
+                csv_path=csv_path,
+                schema=schema,
+                lazy=True
+            )
+            df_filtered = df.loc[:, schema.columns.keys()]
+            dfs_validated[schema_name] = df_filtered
+            log(f"    → {len(df_filtered)} lignes valides ({time.time() - val_start:.2f}s)")
+
+        log(f"✓ Validation terminée ({time.time() - validation_start:.2f}s)", "STEP")
+
+        # Étape 4 — Merge des DataFrames
+        log("-" * 40)
+        log("▶ ÉTAPE 4: Merge operations + operations_stats", "STEP")
+        merge_start = time.time()
+        log(f"  operations: {len(dfs_validated['operations'])} lignes")
+        log(f"  operations_stats: {len(dfs_validated['operations_stats'])} lignes")
+
+        df_operations = pd.merge(
+            dfs_validated["operations"],
+            dfs_validated["operations_stats"],
+            on="operation_id",
+            how="left"
+        )
+
+        # Supprimer les deux DataFrames inutiles
+        dfs_validated.pop("operations", None)
+        dfs_validated.pop("operations_stats", None)
+
+        # Ajouter le DataFrame fusionné
+        dfs_validated["operations"] = df_operations
+        log(f"✓ Merge terminé: {len(df_operations)} lignes ({time.time() - merge_start:.2f}s)", "STEP")
+    else:
+        log("⏭ Étapes 2-4 (Validation) sautées")
+        dfs_validated = {}
 
     # Étape 5 — Création des tables SQL
     log("-" * 40)
@@ -317,119 +350,125 @@ def pipeline_db_cleaned() -> None:
     execute_sql_file("sql/clean_tables.sql", engine)
     log(f"✓ Tables créées ({time.time() - sql_start:.2f}s)", "STEP")
 
-    # Réorganiser l'ordre de chargement
-    order = [
-        "operations",
-        "flotteurs",
-        "resultats_humain"
-    ]
-    dfs_validated = {
-        key: dfs_validated[key]
-        for key in order
-        if key in dfs_validated
-    }
-    log(f"  Ordre de chargement: {list(dfs_validated.keys())}")
-
     # Étape 6 — Chargement en base
-    log("-" * 40)
-    log("▶ ÉTAPE 6: Chargement en base de données", "STEP")
-    load_start = time.time()
+    if not skip_data_load:
+        # Réorganiser l'ordre de chargement
+        order = [
+            "operations",
+            "flotteurs",
+            "resultats_humain"
+        ]
+        dfs_validated = {
+            key: dfs_validated[key]
+            for key in order
+            if key in dfs_validated
+        }
+        log(f"  Ordre de chargement: {list(dfs_validated.keys())}")
 
-    triggers = [
-        ("operations", "audit_operations"),
-        ("flotteurs", "audit_flotteurs"),
-        ("resultats_humain", "audit_resultats_humain"),
-    ]
+        log("-" * 40)
+        log("▶ ÉTAPE 6: Chargement en base de données", "STEP")
+        load_start = time.time()
 
-    # Préparation : truncate + désactiver triggers
-    with engine.connect() as conn:
-        conn.execute(text("SET search_path TO clean"))
+        triggers = [
+            ("operations", "audit_operations"),
+            ("flotteurs", "audit_flotteurs"),
+            ("resultats_humain", "audit_resultats_humain"),
+        ]
 
-        # Truncate tables in reverse FK order
-        log("  Truncate des tables existantes...")
-        for table_name in ["resultats_humain", "flotteurs", "operations"]:
-            conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
-        conn.commit()
-        log("  ✓ Tables vidées")
+        # Préparation : truncate + désactiver triggers
+        with engine.connect() as conn:
+            conn.execute(text("SET search_path TO clean"))
 
-        # Désactiver les triggers d'audit
-        log("  Désactivation des triggers d'audit...")
-        for table, trigger in triggers:
-            conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER {trigger}"))
-        conn.commit()
-        log("  ✓ Triggers désactivés")
+            # Truncate tables in reverse FK order
+            log("  Truncate des tables existantes...")
+            for table_name in ["resultats_humain", "flotteurs", "operations"]:
+                conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
+            conn.commit()
+            log("  ✓ Tables vidées")
 
-    # Chargement bulk via COPY (rapide et robuste à la latence)
-    rows_loaded = {}
-    int_columns = {
-        "operations": [
-            "operation_id",
-            "vent_direction",
-            "vent_force",
-            "mer_force",
-            "maree_coefficient",
-        ],
-        "flotteurs": [
-            "operation_id",
-            "numero_ordre",
-        ],
-        "resultats_humain": [
-            "operation_id",
-            "nombre",
-            "dont_nombre_blesse",
-        ],
-    }
-    for schema_name, df in dfs_validated.items():
-        try:
-            total_rows = len(df)
-            log(f"  Chargement de {schema_name} ({total_rows} lignes)...")
-            table_start = time.time()
+            # Désactiver les triggers d'audit
+            log("  Désactivation des triggers d'audit...")
+            for table, trigger in triggers:
+                conn.execute(text(f"ALTER TABLE {table} DISABLE TRIGGER {trigger}"))
+            conn.commit()
+            log("  ✓ Triggers désactivés")
 
-            df = coerce_int_columns(df, int_columns.get(schema_name, []), schema_name)
-            copy_df_to_db(
-                df=df,
-                table_name=schema_name,
-                engine=engine,
-                schema="clean",
-            )
+        # Chargement bulk via COPY (rapide et robuste à la latence)
+        rows_loaded = {}
+        int_columns = {
+            "operations": [
+                "operation_id",
+                "vent_direction",
+                "vent_force",
+                "mer_force",
+                "maree_coefficient",
+            ],
+            "flotteurs": [
+                "operation_id",
+                "numero_ordre",
+            ],
+            "resultats_humain": [
+                "operation_id",
+                "nombre",
+                "dont_nombre_blesse",
+            ],
+        }
+        for schema_name, df in dfs_validated.items():
+            try:
+                total_rows = len(df)
+                log(f"  Chargement de {schema_name} ({total_rows} lignes)...")
+                table_start = time.time()
 
-            rows_loaded[schema_name] = total_rows
-            speed = total_rows / (time.time() - table_start)
-            log(f"    → {schema_name}: {total_rows} lignes ({time.time() - table_start:.2f}s, {speed:.0f} lignes/s)")
-        except Exception as e:
-            log(f"  ✗ Erreur sur clean.{schema_name}: {e}", "ERROR")
-            continue
+                df = coerce_int_columns(df, int_columns.get(schema_name, []), schema_name)
+                copy_df_to_db(
+                    df=df,
+                    table_name=schema_name,
+                    engine=engine,
+                    schema="clean",
+                )
 
-    # Réactiver les triggers d'audit
-    with engine.connect() as conn:
-        conn.execute(text("SET search_path TO clean"))
-        log("  Réactivation des triggers d'audit...")
-        for table, trigger in triggers:
-            conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER {trigger}"))
-        conn.commit()
-        log("  ✓ Triggers réactivés")
+                rows_loaded[schema_name] = total_rows
+                speed = total_rows / (time.time() - table_start)
+                log(f"    → {schema_name}: {total_rows} lignes ({time.time() - table_start:.2f}s, {speed:.0f} lignes/s)")
+            except Exception as e:
+                log(f"  ✗ Erreur sur clean.{schema_name}: {e}", "ERROR")
+                continue
 
-        # Log résumé audit
-        log("  Enregistrement audit log...")
-        for table_name, count in rows_loaded.items():
-            conn.execute(text("""
-                INSERT INTO audit_log (table_name, operation_type, new_values, user_id)
-                VALUES (:table_name, 'ETL_LOAD', :summary, 'system')
-            """), {
-                'table_name': table_name,
-                'summary': json.dumps({'rows_loaded': count, 'type': 'full_refresh'})
-            })
+        # Réactiver les triggers d'audit
+        with engine.connect() as conn:
+            conn.execute(text("SET search_path TO clean"))
+            log("  Réactivation des triggers d'audit...")
+            for table, trigger in triggers:
+                conn.execute(text(f"ALTER TABLE {table} ENABLE TRIGGER {trigger}"))
+            conn.commit()
+            log("  ✓ Triggers réactivés")
 
-        conn.commit()
+            # Log résumé audit
+            log("  Enregistrement audit log...")
+            for table_name, count in rows_loaded.items():
+                conn.execute(text("""
+                    INSERT INTO audit_log (table_name, operation_type, new_values, user_id)
+                    VALUES (:table_name, 'ETL_LOAD', :summary, 'system')
+                """), {
+                    'table_name': table_name,
+                    'summary': json.dumps({'rows_loaded': count, 'type': 'full_refresh'})
+                })
 
-    log(f"✓ Chargement terminé ({time.time() - load_start:.2f}s)", "STEP")
+            conn.commit()
+
+        log(f"✓ Chargement terminé ({time.time() - load_start:.2f}s)", "STEP")
+    else:
+        log("⏭ Étape 6 (Chargement données) sautée")
 
     # Étape 7 — Création des utilisateurs de test
-    log("-" * 40)
-    log("▶ ÉTAPE 7: Création des utilisateurs de test", "STEP")
-    users_start = time.time()
-    create_test_users(engine)
-    log(f"✓ Utilisateurs créés ({time.time() - users_start:.2f}s)", "STEP")
+    if not skip_users:
+        log("-" * 40)
+        log("▶ ÉTAPE 7: Création des utilisateurs de test", "STEP")
+        users_start = time.time()
+        create_test_users(engine)
+        log(f"✓ Utilisateurs créés ({time.time() - users_start:.2f}s)", "STEP")
+    else:
+        log("⏭ Étape 7 (Utilisateurs test) sautée")
 
     # Étape 8 — Application des vues KPI
     log("-" * 40)
@@ -437,6 +476,16 @@ def pipeline_db_cleaned() -> None:
     kpi_start = time.time()
     apply_kpi_views(engine)
     log(f"✓ Vues KPI appliquées ({time.time() - kpi_start:.2f}s)", "STEP")
+
+    # Étape 9 — Refresh de la vue matérialisée operations_stats
+    log("-" * 40)
+    log("▶ ÉTAPE 9: Refresh vue matérialisée operations_stats", "STEP")
+    refresh_start = time.time()
+    success = refresh_materialized_views()
+    if success:
+        log(f"✓ Vue matérialisée rafraîchie ({time.time() - refresh_start:.2f}s)", "STEP")
+    else:
+        log("⚠ Vue matérialisée non rafraîchie (peut-être pas encore créée)", "WARN")
 
     # Résumé final
     log("=" * 50)

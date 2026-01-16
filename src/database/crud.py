@@ -36,10 +36,32 @@ from src.database.models import (
     OperationStats,
     User,
 )
-from src.database.connection import set_session_user
+from src.database.connection import (
+    set_session_user,
+    refresh_materialized_views_async,
+    invalidate_stats_cache,
+)
 
 # Type générique pour les modèles
 ModelType = TypeVar("ModelType", bound=Base)
+
+# Tables qui affectent la vue matérialisée operations_stats
+# Le refresh n'est nécessaire que pour ces tables
+TABLES_AFFECTING_STATS = {"operations", "resultats_humain"}
+
+
+def _trigger_stats_refresh(model: type) -> None:
+    """Déclenche le refresh de la vue matérialisée si nécessaire.
+
+    Appelé après les opérations CRUD sur les tables qui affectent
+    operations_stats (operations, resultats_humain).
+    """
+    table_name = getattr(model, "__tablename__", "")
+    if table_name in TABLES_AFFECTING_STATS:
+        # Invalider le cache Streamlit immédiatement
+        invalidate_stats_cache()
+        # Rafraîchir la vue matérialisée en arrière-plan
+        refresh_materialized_views_async()
 
 
 # =============================================================================
@@ -112,6 +134,7 @@ class CRUDBase(Generic[ModelType]):
         """Créer un nouvel enregistrement.
 
         Le trigger PostgreSQL s'occupera de l'audit automatiquement !
+        La vue matérialisée sera rafraîchie en arrière-plan si nécessaire.
 
         Args:
             session: Session SQLAlchemy
@@ -130,6 +153,9 @@ class CRUDBase(Generic[ModelType]):
         session.flush()  # Pour obtenir l'ID généré
         session.refresh(db_obj)
 
+        # Rafraîchir la vue matérialisée si nécessaire (en arrière-plan)
+        _trigger_stats_refresh(self.model)
+
         return db_obj
 
     def update(
@@ -138,6 +164,7 @@ class CRUDBase(Generic[ModelType]):
         """Mettre à jour un enregistrement.
 
         Le trigger PostgreSQL loggera old_values et new_values automatiquement !
+        La vue matérialisée sera rafraîchie en arrière-plan si nécessaire.
 
         Args:
             session: Session SQLAlchemy
@@ -157,12 +184,16 @@ class CRUDBase(Generic[ModelType]):
         session.flush()
         session.refresh(db_obj)
 
+        # Rafraîchir la vue matérialisée si nécessaire (en arrière-plan)
+        _trigger_stats_refresh(self.model)
+
         return db_obj
 
     def delete(self, session: Session, id: int, user: str = "system") -> bool:
         """Supprimer un enregistrement.
 
         Le trigger PostgreSQL loggera old_values automatiquement !
+        La vue matérialisée sera rafraîchie en arrière-plan si nécessaire.
 
         Args:
             session: Session SQLAlchemy
@@ -177,6 +208,8 @@ class CRUDBase(Generic[ModelType]):
         obj = self.get(session, id)
         if obj:
             session.delete(obj)
+            # Rafraîchir la vue matérialisée si nécessaire (en arrière-plan)
+            _trigger_stats_refresh(self.model)
             return True
         return False
 
